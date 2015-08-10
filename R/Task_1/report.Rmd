@@ -1,0 +1,185 @@
+---
+title: "Статистический анализ данных (задание 1)"
+author: "Мурат Апишев, группа №417"
+date: "Воскресенье, 1 марта, 2015"
+output: html_document
+---
+
+В данном задании необходимо проанализировать поведение пары критериев — Андерсона-Дарлинга и Лиллиефорса — для задачи проверки гипотезы о нормальности двух выборок из зашумлённых в различной степени нормальных распределений. Для каждого из критериев требуется построить графики зависимости достигаемых уровней значимости и оценок мощностей от параметров и показать, в каких областях изменения параметров предпочтительнее использовать тот или иной критерий.
+
+Исходные параметры эксперимента выглядят следующим образом:
+
+
+$$X^n, X ~ p N(0,1) + (1 - p) C(0, 1)$$
+
+$$H_0: X ~ N$$
+
+$$H_1: H_0 \:\: не \: верна$$
+
+$$n = 20:1:100, \quad p = 0:0.01:1$$
+
+Добавим в текущее рабочее пространство библиотеку 'nortest', позволяющую использовать оба критерия, и библиотеку 'fields', необходимую для отображения графиков:
+```{r results='hide', message=FALSE, warning=FALSE}
+library('nortest')
+library('fields')
+```
+
+Опишем функцию генерации выборки необходимого объёма из смеси распределений с заданными весами:
+```{r}
+generate_sample <- function(n, p) {
+  indices <- runif(n)
+  sample <- rep(0, n)
+  
+  objects <- rnorm(n)
+  sample[indices <= p] <- objects[indices <= p]
+  objects <- rt(n, 1)      
+  sample[indices > p] <- objects[indices > p]  
+  
+  return(sample)
+}
+```
+
+Установим общие необходимые для всех экспериментов параметры:
+```{r}
+alpha    <- 0.05
+n_params <- seq(from=20, to=100, by=1)
+p_params <- seq(from=0, to=1, by=0.01)
+len_n    <- length(n_params)
+len_p    <- length(p_params)
+grid     <- expand.grid(x=n_params, y=p_params)
+```
+
+Запустим код, который позволит вычислить все необходимые значения:
+```{r}
+p_value_ad <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+p_value_li <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+  
+for (n in (1 : len_n)) {
+  for (p in (1 : len_p)) {
+    sample <- generate_sample(n_params[n], p_params[p])
+    p_value_ad[n, p] <- p_value_ad[n, p] + ad.test(sample)$p.value
+    p_value_li[n, p] <- p_value_li[n, p] + lillie.test(sample)$p.value
+  }
+}
+```
+
+Отобразим полученные достигаемые уровни значимости при разных значениях параметров $n$ и $p$:
+```{r}
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), p_value_ad, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Anderson-Darling Test p-values", xlab=expression(n), ylab=expression(p))
+
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), p_value_li, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Lillieforce Test p-values", xlab=expression(n), ylab=expression(p))
+```
+
+Однократная генерация пары выборок не позволяет точно оценить границы области, где нулевая гипотеза отклоняется, поэтому необходимо усреднение по большому числу экспериментов. Возьмём 1000 повторений:
+```{r}
+no_iter <- 1000
+p_value_ad <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+p_value_li <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+power_ad <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+power_li <- matrix(rep(0, len_p * len_n), nrow = len_n, ncol = len_p)
+  
+for (i in (1 : no_iter)) {
+  for (n in (1 : len_n)) {
+    for (p in (1 : len_p)) {
+      sample <- generate_sample(n_params[n], p_params[p])
+      p_value_ad_local <- ad.test(sample)$p.value
+      p_value_li_local <- lillie.test(sample)$p.value
+      p_value_ad[n, p] <- p_value_ad[n, p] + p_value_ad_local
+      p_value_li[n, p] <- p_value_li[n, p] + p_value_li_local
+      if (p_value_ad_local < alpha) { power_ad[n,p] <- power_ad[n,p] + 1 }
+      if (p_value_li_local < alpha) { power_li[n,p] <- power_li[n,p] + 1 }
+    }
+  }
+}
+  
+p_value_ad <- p_value_ad / no_iter
+p_value_li <- p_value_li / no_iter
+power_ad   <- power_ad / no_iter
+power_li   <- power_li / no_iter
+```
+Посмотрим сначала на средние достигаемые уровни значимости и мощности критериев при $n$ = 100:
+```{r}
+par(mfrow=c(1,1))
+plot(p_params, p_value_ad[dim(p_value_ad)[1],],   col="red", type="l", xlab=expression(p), ylab="Average p-value", main="", 
+     ylim=c(0,1))
+lines(p_params, p_value_li[dim(p_value_ad)[1],], col="blue")
+legend("topright", c("Anderson-Darling", "Lillieforce"), lty=c(1,1), col=c("red", "blue"))
+grid()
+```
+```{r}
+par(mfrow=c(1,1))
+plot(p_params, power_ad[dim(p_value_ad)[1],],   col="red", type="l", xlab=expression(p), ylab="Estimated power", main="", 
+     ylim=c(0,1))
+lines(p_params, power_li[dim(p_value_ad)[1],], col="blue")
+legend("topright", c("Anderson-Darling", "Lillieforce"), lty=c(1,1), col=c("red", "blue"))
+grid()
+```
+
+Критерий Андерсона-Дарлинга равномерно мощнее, хотя и не очень значительно.
+
+Средние достигаемые уровни значимости и оценки мощности критериев при различных значениях параметров $n$ и $p$:
+```{r}
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), p_value_ad, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Anderson-Darling Test p-values", xlab=expression(n), ylab=expression(p))
+
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), p_value_li, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Lillieforce Test p-values", xlab=expression(n), ylab=expression(p))
+```
+```{r}
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), power_ad, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Anderson-Darling Test power", xlab=expression(n), ylab=expression(p))
+
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), power_li, 
+            col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024), 
+            main="Lillieforce Test power", xlab=expression(n), ylab=expression(p))
+```
+```{r}
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), p_value_ad - p_value_li, 
+           col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024),
+           main="Average p-value difference (A-D - L)", xlab=expression(n), ylab=expression(p))
+
+image.plot(matrix(grid$x, nrow=len_n, ncol=len_p), matrix(grid$y, nrow=len_n, ncol=len_p), power_ad - power_li, 
+           col = colorRampPalette(c("blue", "cyan", "yellow", "red"))(1024),
+           main="Power difference (A-D - L)", xlab=expression(n), ylab=expression(p))
+```
+
+Из графиков видно, что оба рассматриваемых критерия достаточно похожи: с ростом объёма выборки степень шума, определяемого параметром $p$, всё сильнее способствует отвержению гипотези о нормальности. Тем не менее, снова наблюдается факт того, что критерий Андерсона-Дарлинга мощнее критерия Лиллиефорса, при высоких значениях $p$ ($\ge 0.6$) — для любого объёма выборки, при низких — для выборок объёма 40 и меньше. При таких объёмах выборки  критерий Лиллиефорса сильнее склонен в тому, чтобы не отвергать гипотезу нормальности, даже в тех случаях, когда более половины выборки взято не из нормального распределения.
+
+Чтобы оценить корректность критериев, посмотрим отдельно, как часто гипотеза о нормальности выборки отвергается при $p$=1 (то есть, на частоту ошибок первого рода) при различных $n$:
+```{r}
+no_iter <- 10000
+T1_ad  <- rep(0, len_n)
+T1_li  <- rep(0, len_n)
+  
+for (i in (1 : no_iter)) {
+  for (n in (1 : len_n)) {
+    sample <- generate_sample(n_params[n], 1)
+    p_value_ad_local <- ad.test(sample)$p.value
+    p_value_li_local <- lillie.test(sample)$p.value
+    if (p_value_ad_local < alpha) { T1_ad[n] <- T1_ad[n] + 1 }
+    if (p_value_li_local < alpha) { T1_li[n] <- T1_li[n] + 1 }
+  }
+}
+  
+T1_ad <- T1_ad / no_iter
+T1_li <- T1_li / no_iter
+
+par(mfrow=c(1,1))
+plot(n_params, T1_ad,   col="red", type="l", xlab=expression(n), ylab="Type I error frequency", main="", 
+     ylim=c(min(T1_ad, T1_li), max(T1_ad, T1_li)))
+lines(n_params, T1_li, col="blue")
+legend("topright", c("Anderson-Darling", "Lillieforce"), lty=c(1,1), col=c("red", "blue")) 
+```
+
+График числа ошибок первого рода говорит о том, что оба критерия являются корректными и вне зависимости от размера выборки имеют среднюю частоту ошибок примерно на уровне значимости. Однако немного заметно, что рост объёма выборки в целом увеличивает величину ошибки критерия Лиллиефорса, в то время как для Андерсона-Дарлинга эта величина колеблется вокруг одного и того же среднего значения.
+
+Таким образом, оба критерия имеют схожие границы применимости в терминах объёма выборки — $n \ge 40$. В случае же выборок меньшего объёма предпочтительнее использовать критерий Андерсона-Дарлинга. Степень зашумлённости, как для критерия Андерсона-Дарлинга, так и для критерия Лиллиефорса, должна не превосходить $1 - p \le 0.2$.
+
+

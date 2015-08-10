@@ -1,0 +1,290 @@
+---
+title: "Кардиотокография"
+output: html_document
+---
+
+Кардиотокография — диагностическая техника, фиксирующая сердцебиение плода и тонус матки и позволяющая оценить состояние эмбриона. Непосредственный результат наблюдений интерпретировать крайне сложно. Чтобы облегчить задачу диагностики, результаты кардиотокографии 1831 эмбрионов были классифицированы опытными специалистами на нормальные и патологические, а на основе показаний прибора было сгенерировано 22 признака.
+Ставится задача построения функции, определяющей вероятность наличия патологии по описанию кардиотокограммы и  оценки вклада признаков.
+
+```{r results='hide', warning=FALSE, message=FALSE, echo=FALSE}
+library(mfp)
+library(lattice)
+library(AUC)
+library(plyr)
+library(lmtest)
+```
+
+Посмотрим на распределения непрерывных признаков в классах:
+```{r, echo=FALSE, fig.height=10, fig.width=10, warning=FALSE}
+data <- read.csv('CTG_data.csv')                 
+data$Tendency <- factor(data$Tendency, levels=c("0","1","-1"))
+  
+# panel.hist <- function(x, ...){
+#     usr <- par("usr"); on.exit(par(usr))
+#     par(usr = c(usr[1:2], 0, 1.5) )
+#     h <- hist(x, plot = FALSE)
+#     breaks <- h$breaks; nB <- length(breaks)
+#     y <- h$counts; y <- y/max(y)
+#     rect(breaks[-nB], 0, breaks[-1], y, col = "red", ...)
+# }
+# 
+# panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...){
+#     usr <- par("usr"); on.exit(par(usr))
+#     par(usr = c(0, 1, 0, 1))
+#     r <- abs(cor(x, y))
+#     txt <- format(c(r, 0.123456789), digits = digits)[1]
+#     txt <- paste0(prefix, txt)
+#     if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+#     text(0.5, 0.5, txt, cex = cex.cor * r)
+# }
+# 
+# panel.dots <- function(x, y, ...){
+#   points(x, y, pch=1, col=mycol)
+# }
+# mycol <- data$NSP
+# pairs(data[,c(1:5, 7, 9:21)], diag.panel=panel.hist, 
+#       upper.panel = panel.cor, lower.panel = panel.dots)
+
+par(mfrow=c(4,5), mar=c(4, 2, 2, 1))
+for (i in c(1:5, 7, 9:21)){
+  d1 <- density(data[data$NSP == "N",i])
+  d2 <- density(data[data$NSP == "P",i])
+  plot(d1, col="blue", xlim=c(min(d1$x, d2$x), max(d1$x, d2$x)), ylim=c(min(d1$y, d2$y), max(d1$y, d2$y)), xlab=colnames(data)[i], main="")
+  lines(d2, col="red")
+}
+
+plot(1, type = "n", axes=FALSE, xlab="", ylab="")
+legend("center", c("Normal", "Pathological"), lty=c(1,1), col=c("blue", "red"))
+```
+Линейной разделимости по отдельным признакам нет.
+
+Посмотрим на таблицы сопряжённости по категориальным признакам:
+```{r, warning=FALSE}
+table(data$DS, data$NSP)
+table(data$DR, data$NSP)
+table(data$Tendency, data$NSP)
+```
+DR — константа, DS — почти константа, поэтому удалим эти признаки.
+```{r, echo=FALSE, warning=FALSE}
+data$DS <- NULL
+data$DR <- NULL
+```
+
+Для предварительного отбора признаков построим одномерные модели по каждому фактору и оценим их значимость:
+```{r, echo=FALSE, warning=FALSE}
+m0 <- glm(NSP~1, family=binomial(), data=data)
+add1(m0, scope = as.formula(paste("~", paste(head(colnames(data), -1), collapse= " + "))), test="LRT")
+```
+
+#### Модель 1
+Многомерная модель со всеми предикторами, значимыми на уровне 0.25:
+```{r, echo=FALSE, warning=FALSE}
+m1 <- glm(NSP ~ AC + FM + UC + DL + DP + ASTV + MSTV + ALTV + MLTV + Width + Min + Max + Nmax + Mode + Mean + Median + Variance + Tendency, family=binomial(), data=data)
+summary(m1)
+```
+
+Один из коэффициентов не определяется, значит, среди признаков есть линейно зависимые. Попробуем удалять по одному признаку, чтобы посмотреть, в каком случае линейная зависимость исчезает. В следующей таблице содержатся коэффициенты таких моделей, по строкам — признаки, которые в модели есть, по столбцам — признаки, удалённые из модели. 
+```{r, warning=FALSE, echo=FALSE}
+cs           <- matrix(0, ncol=length(coefficients(m1))-2, nrow=length(coefficients(m1))-1)
+rownames(cs) <- names(coefficients(m1)[-1])
+colnames(cs) <- c(names(coefficients(m1)[-c(1,19,20)]), "Tendency")
+for (i in 1:ncol(cs)){
+  tmp <- coefficients(glm(as.formula(paste("NSP ~", paste(colnames(cs)[-i], collapse=" + "))), family=binomial(), data=data))[-1]  
+  cs[names(tmp),i] <- tmp 
+}
+
+round(cs, 3)
+```
+По всей видимости, коллинеарны признаки в группе Width, Min и Max — при удалении любого из них получается хорошая модель, причём одна и та же. 
+
+#### Модель 2
+Удалим Width:
+```{r, echo=FALSE, warning=FALSE}
+m2 <- glm(NSP ~ AC + FM + UC + DL + DP + ASTV + MSTV + ALTV + MLTV + Min + Max + Nmax + Mode + Mean + Median + Variance + Tendency, family=binomial(), data=data)
+summary(m2)
+```
+
+Критерий отношения правдоподобия считает такую модель существенно лучшей константы:
+```{r, echo=FALSE, warning=FALSE}
+lrtest(m0, m2)
+```
+
+#### Модели 3 и 4
+Новая модель без незначимых признаков:
+```{r, echo=FALSE, warning=FALSE}
+m3 <- glm(NSP ~ AC + UC + DP + ASTV + ALTV + Max + Nmax + Mode + Variance + Tendency, family=binomial(), data=data)
+summary(m3)
+lrtest(m3, m2)
+```
+По критерию отношения правдоподобия ухудшения не произошло. В полученной модели значимы все признаки, кроме фиктивной переменной для Tendency=1.
+
+Проверим линейность логита по непрерывным признакам. Сглаженные диаграммы рассеяния:
+```{r, echo=FALSE, fig.height=10, fig.width=10}
+par(mfrow=c(3,3))
+
+lw  <- ksmooth(data$AC, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$AC))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="AC", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$UC, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$UC))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="UC", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$DP, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$DP))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="DP", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$ASTV, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$ASTV))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="ASTV", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$ALTV, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$ALTV))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="ALTV", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$Max, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$Max))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="Max", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$Nmax, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$Nmax))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="Nmax", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$Mode, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$Mode))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="Mode", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$Variance, 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$Variance))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="Variance", ylab ="Log-odds",col="red", lwd=2)
+```
+
+По некоторым признакам логит существенно нелинеен. Попробуем подобрать дробные полиномы для непрерывных признаков:
+```{r, warning=FALSE, echo=FALSE, cache=TRUE}
+mfp(NSP ~ fp(AC) + fp(UC) + fp(DP) + fp(ASTV) + fp(ALTV) + fp(Max) + fp(Nmax) + fp(Mode) + fp(Variance) + Tendency, family = binomial, data=data)
+m4 <- glm(NSP ~ AC + UC + DP + ASTV + I(ALTV^3) + I(Max^3 * (1 + log(Max))) + log(Nmax+1) + Mode + Variance + Tendency, family=binomial(), data=data)
+summary(m4)
+```
+У модели с преобразованными признаками большая аномальность, то есть, она хуже объясняет выборку. Посмотрим на сглаженные диаграммы рассеяния для преобразованных признаков:
+```{r, echo=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,3))
+
+lw  <- ksmooth(log(data$ALTV+1), 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(log(data$ALTV+1)))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="ALTV^3", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(data$Max^3 * (1 + log(data$Max)), 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(data$Max^3 * (1 + log(data$Max))))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="Max^3 * (1 + log(Max))", ylab ="Log-odds",col="red", lwd=2)
+
+lw  <- ksmooth(log(data$Nmax+1), 1 * (data$NSP == "P"), kernel = "normal", bandwidth=sd(log(data$Nmax+1)))
+lsm <- log(lw$y / (1-lw$y))
+plot(lw$x, lsm, type="l", xlab="log(Nmax+1)", ylab ="Log-odds",col="red", lwd=2)
+```
+Видим, что ни по одному из признаков логит не стал линейнее. Откажемся от найденных преобразований.
+
+#### Модели 5 и 6
+Попробуем добавлять в линейную модель попарные взаимодействия:
+```{r, echo=FALSE, warning=FALSE, cache=TRUE}
+add1(m3, scope= ~ .^2, test="LRT")
+```  
+
+Попробуем добавить несколько наиболее значимых (при этом для простоты не будем брать взаимодействия с категориальным признаком):
+```{r, echo=FALSE, warning=FALSE}
+m5 <- glm(NSP ~ AC + UC + DP + ASTV + ALTV + Max + Nmax + Mode + Variance + Tendency + 
+                UC:Mode + UC:Variance + UC:ASTV, family=binomial(), data=data)
+summary(m5)
+lrtest(m5, m3)
+```  
+По критерию отношения правдоподобия получается лучше, однако часть коэффициентов модели незначимы. Проверим, что можно безболезненно удалить:
+```{r, echo=FALSE, warning=FALSE}
+drop1(m5, test="LRT")
+```  
+Удалим UC*ASTV и Tendency:
+```{r, echo=FALSE, warning=FALSE}
+m6 <- glm(NSP ~ AC + UC + DP + ASTV + ALTV + Max + Nmax + Mode + Variance + 
+                UC:Mode + UC:Variance, family=binomial(), data=data)
+summary(m6)
+lrtest(m5, m6)
+lrtest(m6, m3)
+```
+Модель получается не хуже пятой и лучше третьей; остановимся на ней.
+
+#### Модель 7
+Попробуем удалить влиятельные наблюдения:
+```{r, echo=FALSE}
+phat <- predict(m6, type="response")
+
+par(mfrow=c(1,1))
+plot(phat, cooks.distance(m6), pch=20, xlab=expression(hat(pi)(x[i])))
+lines(c(0,1), c(0.15,0.15), col="red", lwd=2)
+
+data2 <- data[cooks.distance(m6)<0.15,]
+mtmp  <- glm(NSP ~ AC + UC + DP + ASTV + ALTV + Max + Nmax + Mode + Variance + 
+                UC:Mode + UC:Variance, family=binomial(), data=data2)
+summary(mtmp)
+```
+Сравнить полученные коэффициенты с коэффициентами модели, настроенной по полным данным:
+```{r, echo=FALSE}
+res <- cbind(coefficients(m6), coefficients(mtmp))
+colnames(res) <- c("All data", "Filtered data")
+res
+```
+Различия небольшие, так что оставим модель, настроенную на полных данных.
+
+#### Итог
+Посмотрим на качество классификации:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+par(mfrow=c(1,2))
+phat <- predict(m6, type="response")
+
+sens <- sensitivity(phat, factor(1 * (data$NSP == "P")))
+plot(sens, col="red")
+spec <- specificity(phat, factor(1 * (data$NSP == "P")))
+lines(spec$cutoffs, spec$measure, col="blue", ylab="")
+grid()
+legend("bottom", c("sensitivity", "specificity"), lty=c(1,1), col=c("red", "blue"))
+
+r <- roc(phat, factor(1 * (data$NSP == "P")))
+plot(r)
+```
+
+При пороге 0.9 построенная модель обеспечивает чувствительность и специфичность, равные $\approx$ 0.98; площадь под ROC-кривой составляет `r auc(r)`. 
+Значимость модели по критерию отношения правдоподобия равна `r lrtest(m6,m0)$"Pr(>Chisq)"[2]`.
+
+Приросты отношений шансов на патологию для каждого признака и доверительные интервалы для них:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+exp(coefficients(m6))[-1]
+exp(confint(m6))[-1,]
+```
+
+Расшифровки обозначений для признаков в финальной модели:
+- AC - число ускорений в секунду;
+- UC - число сокращений матки;
+- DP - число длительных замедлений в секунду;
+- ASTV - процент абнормальных краткосрочных изменений;
+- ALTV - процент абнормальных долгосрочных изменений;
+- Max - максимум гистограммы FHR;
+- Nmax - число раз, которое достигается максимум в гистограмме FHR;
+- Mode - мода гистограммы FHR;
+- Variance - дисперсия гистограммы FHR.
+
+Выводы:
+
+* С ростом числа ускорений в секунду на единицу риск патологии уменьшается в `r  round(1 / exp(coefficients(m6))["AC"], 2)` раз с 95% доверительным интервалом `r (round(1 / exp(confint(m6))["AC",c(2,1)], 2))`.
+
+* С увеличением на единицу числа длительных замедлений в секунду риск патологии увеличивается в `r round((exp(coefficients(m6))["DP"]), 2)` раз с 95% доверительным интервалом `r (round((exp(confint(m6))["DP",]), 2))`.
+
+* С увеличением на процент доли абнормальных краткосрочных изменений риск патологии увеличивается в `r  round(exp(coefficients(m6))["ASTV"], 2)` раз с 95% доверительным интервалом `r round(exp(confint(m6))["ASTV",], 2)`.
+
+* Увеличение на процент доли абнормальных долгосрочных изменений связано с ростом риска патологии в `r  round(exp(coefficients(m6))["ALTV"], 2)` раз с 95% доверительным интервалом`r round(exp(confint(m6))["ALTV",], 2)`.
+
+* С увеличением на единицу максимума гистограммы FHR риск патологии увеличивается в `r  round(exp(coefficients(m6))["Max"], 2)` раз с 95% доверительным интервалом `r round(exp(confint(m6))["Max",], 2)`.
+
+* C каждым дополнительным максимумом гистограммы FHR риск патологии уменьшается в `r round(1/exp(coefficients(m6))["Nmax"], 2)` раз с 95% доверительным интервалом `r round(1/exp(confint(m6))["Nmax",c(2,1)], 2)`.
+
+* Увеличение на единицу моды гистограммы FHR связано с уменьшением риска патологии в `r round(1 / exp(coefficients(m6)["Mode"] + coefficients(m6)["UC:Mode"]), 2)` раз с 95% доверительным интервалом `r round(1 / exp(confint(m6)["Mode",c(1,2)] + confint(m6)["UC:Mode",c(1,2)]), 2)`.
+
+* Увеличение на единицу дисперсии гистограммы FHR при минимальном значении числа сокращений матки (`r min(data$UC)`) связано с увеличением риска патологии в `r round(exp(coefficients(m6)["Variance"] + coefficients(m6)["UC:Variance"] * min(data$UC)), 2)` раз с 95% доверительным интервалом `r round(exp(confint(m6)["Variance",c(1,2)] + confint(m6)["UC:Variance",c(1,2)] * min(data$UC)), 2)`. При этом каждое увеличение на 1 числа сокращений матки приводит к росту влияния изменения дисперсии на `r round(exp(coefficients(m6)["UC:Variance"]), 2)` с 95% интервалом `r round(exp(confint(m6)["UC:Variance",c(1,2)]), 2)`.
+
+* Увеличение на единицу моды гистограммы FHR при минимальном значении числа сокращений матки (`r min(data$UC)`) связано с уменьшением риска патологии в `r round(1 / exp(coefficients(m6)["Mode"] + coefficients(m6)["UC:Mode"] * min(data$UC)), 2)` раз с 95% доверительным интервалом `r round(1 / exp(confint(m6)["Mode",c(2,1)] + confint(m6)["UC:Mode",c(2,1)] * min(data$UC)), 2)`. При этом каждое увеличение на 1 числа сокращений матки приводит к снижению влияния изменения моды на `r round(1 / exp(coefficients(m6)["UC:Mode"]), 2)` с 95% интервалом `r round(1 / exp(confint(m6)["UC:Mode",c(2,1)]), 2)`.

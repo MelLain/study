@@ -1,0 +1,619 @@
+---
+title: "Статистический анализ данных (Задание 2)"
+author: "Мурат Апишев, группа №417"
+date: "Среда, 18 марта, 2015"
+output: html_document
+---
+
+В данном задании имеются данные о разрушающих моментах промышленных вентиляторов, даны характеристики этих вентиляторов. Требуется определить, зависит ли значение разрушающего момента от характеристик вентиляторов.
+
+Данные представляют собой выборку $X^n = \{x_i\}_{i = 1}^n$, где $n = 64$, а каждый элементы выборки характеризуется 4-мя значениями:
+
+- Тип отверстия (бинарный признак, значения {'круглое', 'шестиугольное'})
+- Метод соединения (бинарный признак, значения {'паз', 'резьба'})
+- Форма барабана (бинарный признак, значения {'гладкий', 'гофрированный'})
+- Разрушающий крутящий момент (непрерывный признак)
+
+Перед использованием, данные были преобразованы: была удалена строка с заголовками столбцов (названиями признаков) и все значения-строки были переведены на английский язык для того, чтобы избежать проблем с кодировками. Переводы получились следующие:
+
+- {'круглое' ---> 'circle', 'шестиугольное' ---> 'hexagon'}
+- {'паз' ---> 'groove', 'резьба' ---> 'thread'}
+- {'гладкий' ---> 'plain', 'гофрированный' ---> 'corrugated'}
+
+Предлагается следующая схема решения поставленной задачи. Для каждого бинарного признака значения разрушающего момента делятся на две части (в соответствии со значением бинарного признака). Затем две полученные независимые выборки подаются на вход соответствующему статистическому критерию, проверяющему гипотезу о том, что они порождены одним вероятностным распределением. Опровержение гипотезы равносильно наличию зависимости между разрушающим моментом и данной характеристикой вентилятора.
+
+Будем использовать два статистических критерия, подходящих для решения данной задачи: критерий Колмогорова-Смирнова и критерий Андерсона-Дарлинга. В качестве уровня значимости $\alpha$ возьмём 0.05.
+
+Для использования указанных выше критериев требуется подключить соответствующие библиотеки
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library('stats')
+library('adk')
+```
+
+Следующим шагом загрузим исходные данные в data.frame
+
+```{r results='hide', message=FALSE, warning=FALSE}
+sample <- read.table('fans_eng.txt')
+```
+
+Проведём анализ зависимостей, связанных с первым признаком
+
+```{r results='hide', message=FALSE, warning=FALSE}
+indices <- sample[, 1] == 'circle'
+sample_1 <- as.numeric(gsub(",", ".", c(matrix(sample[indices, 4]))))
+sample_2 <- as.numeric(gsub(",", ".", c(matrix(sample[!indices, 4]))))
+ks.test(sample_1, sample_2)
+```
+
+Получили допустимый уровень значимости 0.27, что не позволяет отвергнуть гипотезу о том, что выборки получены из одного распределения. Получается, что данный критерий допускает возможность независимости разрушающего момента вентилятора от признака 'Тип отверстия'.
+
+Теперь подадим те же данные на вход критерию Андерсона-Дарлинга:
+```{r results='hide', message=FALSE, warning=FALSE}
+adk.test(sample_1, sample_2)
+```
+
+Получили p-value равный 0.08, что подтверждает предыдущий вывод, хотя и в меньшей степени.
+
+Исследуем теперь взаимосвязь разрушающего момента и признака 'Метод соединения'
+
+```{r results='hide', message=FALSE, warning=FALSE}
+indices <- sample[, 2] == 'groove'
+sample_1 <- as.numeric(gsub(",", ".", c(matrix(sample[indices, 4]))))
+sample_2 <- as.numeric(gsub(",", ".", c(matrix(sample[!indices, 4]))))
+ks.test(sample_1, sample_2)
+adk.test(sample_1, sample_2)
+```
+
+Допустимые уровни значимости, полученные в результате, равны 0.01 и 3.8e-4 для критериев Колмогорова-Смирнова и Андерсона-Дарлинга соответственно. Это позволяет уверенно отвергнуть гипотезу общего наличия общего для обеих выборок порождающего распределения. Таким образом, разрушающий момент вентилятора зависит от признака 'Метод соединения'.
+
+Рассмотрим связь разрушающего момента с последним бинарным признаком
+
+```{r results='hide', message=FALSE, warning=FALSE}
+indices <- sample[, 3] == 'plain'
+sample_1 <- as.numeric(gsub(",", ".", c(matrix(sample[indices, 4]))))
+sample_2 <- as.numeric(gsub(",", ".", c(matrix(sample[!indices, 4]))))
+ks.test(sample_1, sample_2)
+adk.test(sample_1, sample_2)
+```
+
+p-value получились 2.5e-14 и 0, что показывает наличие сильной взаимосвязи между разрушающим моментом вентилятора и значеним его признака 'Форма барабана'.
+
+Теперь применим трёхфакторный дисперсионный анализ для определения значимости влияния в совокупности всех характеристик вентилятора на разрушающий крутящий момент
+
+```{r message=FALSE, warning=FALSE}
+names(sample) <- c('type', 'method', 'form', 'moment')
+sample <- transform(sample, moment = as.numeric(gsub(",", ".", moment)))
+aov_res <- aov(moment ~ type * method * form, data=sample)
+summary(aov_res)
+```
+
+Построим необходимые графики
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=10, fig.width=10}
+par(mfrow = c(3, 2))
+with(sample[sample$type == "circle", ],  interaction.plot(method, form, moment, main = "Type is 'circle'"))
+with(sample[sample$type == "hexagon", ],  interaction.plot(method, form, moment, main = "Type is 'hexagon'"))
+
+with(sample[sample$method == "groove", ],  interaction.plot(type, form, moment, main = "Method is 'groove'"))
+with(sample[sample$method == "thread", ],  interaction.plot(type, form, moment, main = "Method is 'thread'"))
+
+with(sample[sample$form == "plain", ],  interaction.plot(type, method, moment, main = "Form is 'plain'"))
+with(sample[sample$form == "corrugated", ],  interaction.plot(type, method, moment, main = "Form is 'corrugated'"))
+```
+
+Тройное взаимодействие значимо, поэтому разделим выборку по одному из признаков.
+
+###############################################################################
+
+Проведём двухфакторный дисперсионный анализ для вентиляторов с круглым типом отверстия:
+
+```{r message=FALSE, warning=FALSE}
+aov_res2 <- aov(moment ~ method * form, data=subset(sample, type == "circle"))
+summary(aov_res2)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(DescTools)
+EtaSq(aov_res2, type=1)
+```
+
+Присутствует значимое межфакторное взаимодействие:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$type == "circle", ], interaction.plot(method, form, moment, xlab="method", ylab="moment"))
+with(sample[sample$type == "circle", ], interaction.plot(form, method, moment, xlab="form", ylab="moment"))
+```
+
+Поэтому снова поделим выборку.
+
+Однофакторный анализ для вентиляторов с круглым отверстием и пазовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "circle" & method == "groove"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res21 <- aov(moment ~ form, data=subset(sample, type == "circle" & method == "groove"))
+summary(aov_res21)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res21, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res21)
+```
+
+Однофакторный анализ для вентиляторов с круглым отверстием и резьбовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "circle" & method == "thread"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res22 <- aov(moment ~ form, data=subset(sample, type == "circle" & method == "thread"))
+summary(aov_res22)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res22, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res22)
+```
+
+Однофакторный анализ для вентиляторов с круглым отверстием и плоским барабаном:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "circle" & form == "plain"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res23 <- aov(moment ~ method, data=subset(sample, type == "circle" & form == "plain"))
+summary(aov_res23)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res23, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res23)
+```
+
+Однофакторный анализ для вентиляторов с круглым отверстием и гофрированным барабаном:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "circle" & form == "corrugated"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res24 <- aov(moment ~ method, data=subset(sample, type == "circle" & form == "corrugated"))
+summary(aov_res24)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res24, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res24)
+```
+
+Выводы следующие:
+
+1) Круглый тип + пазовый метод         ---> плоская форма лучше на 124, интервал [116, 131], p-value = 0.
+
+2) Круглый тип + резьбовой метод       ---> плоская форма лучше на 157, интервал [151, 163], p-value = 0.
+
+3) Круглый тип + плоская форма         ---> резьбовой метод хуже на 40, интервал [-48, -33], p-value = 0.
+
+3) Круглый тип + гофрированная форма   ---> резьбовой метод хуже на 74, интервал [-80, -68], p-value = 0.
+
+###############################################################################
+
+Проведём двухфакторный дисперсионный анализ для вентиляторов с шестиугольным типом отверстия:
+
+```{r message=FALSE, warning=FALSE}
+aov_res3 <- aov(moment ~ method * form, data=subset(sample, type == "hexagon"))
+summary(aov_res3)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res3, type=1)
+```
+
+Присутствует значимое межфакторное взаимодействие:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$type == "hexagon", ], interaction.plot(method, form, moment, xlab="method", ylab="moment"))
+with(sample[sample$type == "hexagon", ], interaction.plot(form, method, moment, xlab="form", ylab="moment"))
+```
+
+Поэтому снова поделим выборку.
+
+Однофакторный анализ для вентиляторов с шестиугольным отверстием и пазовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "hexagon" & method == "groove"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res31 <- aov(moment ~ form, data=subset(sample, type == "hexagon" & method == "groove"))
+summary(aov_res31)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res31, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res31)
+```
+
+Однофакторный анализ для вентиляторов с шестиугольным отверстием и резьбовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "hexagon" & method == "thread"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res32 <- aov(moment ~ form, data=subset(sample, type == "hexagon" & method == "thread"))
+summary(aov_res32)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res32, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res32)
+```
+
+Однофакторный анализ для вентиляторов с шестиугольным отверстием и плоским барабаном:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "hexagon" & form == "plain"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res33 <- aov(moment ~ method, data=subset(sample, type == "hexagon" & form == "plain"))
+summary(aov_res33)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res33, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res33)
+```
+
+Однофакторный анализ для вентиляторов с шестиугольным отверстием и гофрированным барабаном:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "hexagon" & form == "corrugated"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res34 <- aov(moment ~ method, data=subset(sample, type == "hexagon" & form == "corrugated"))
+summary(aov_res34)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res34, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res34)
+```
+
+Выводы следующие:
+
+1) Шестиугольный тип + пазовый метод         ---> плоская форма лучше на 166, интервал [156, 175], p-value = 0.
+
+2) Шестиугольный тип + резьбовой метод       ---> плоская форма лучше на 148, интервал [139, 157], p-value = 0.
+
+3) Шестиугольный тип + плоская форма         ---> резьбовой метод хуже на 30, интервал [-41, -18], p-value = 6.45e-05.
+
+3) Шестиугольный тип + гофрированная форма   ---> резьбовой метод хуже на 12, интервал [-18, -6], p-value = 0.0008628.
+
+###############################################################################
+
+Проведём двухфакторный дисперсионный анализ для вентиляторов с пазовым методом соединения:
+
+```{r message=FALSE, warning=FALSE}
+aov_res4 <- aov(moment ~ type * form, data=subset(sample, method == "groove"))
+summary(aov_res4)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res4, type=1)
+```
+
+Присутствует значимое межфакторное взаимодействие:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$method == "groove", ], interaction.plot(type, form, moment, xlab="type", ylab="moment"))
+with(sample[sample$method == "groove", ], interaction.plot(form, type, moment, xlab="form", ylab="moment"))
+```
+
+Поэтому снова поделим выборку.
+
+Однофакторный анализ для вентиляторов с пазовым соединением и плоской формой барабана:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ type, data=subset(sample, form == "plain" & method == "groove"), xlab="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res41 <- aov(moment ~ type, data=subset(sample, form == "plain" & method == "groove"))
+summary(aov_res41)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res41, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res41)
+```
+
+Однофакторный анализ для вентиляторов с пазовым соединением и гофрированной формой барабана:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ type, data=subset(sample, form == "corrugated" & method == "groove"), xlab="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res42 <- aov(moment ~ type, data=subset(sample, form == "corrugated" & method == "groove"))
+summary(aov_res42)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res42, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res42)
+```
+
+Однофакторный анализ для вентиляторов с пазовым соединением и круглым отверстием:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "circle" & method == "groove"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res43 <- aov(moment ~ form, data=subset(sample, type == "circle" & method == "groove"))
+summary(aov_res43)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res43, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res43)
+```
+
+Однофакторный анализ для вентиляторов с пазовым соединением и шестиугльным отверстием:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ form, data=subset(sample, type == "hexagon" & method == "groove"), xlab="form")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res44 <- aov(moment ~ form, data=subset(sample, type == "hexagon" & method == "groove"))
+summary(aov_res44)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res44, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res44)
+```
+
+Выводы следующие:
+
+1) Пазовый метод + плоская форма       ---> шестиугольный тип хуже на 28, интервал [-38, -17], p-value = 5.27e-05.
+
+2) Пазовый метод + гофрированная форма ---> шестиугольный тип хуже на 70, интервал [-75, -64], p-value = 0.
+
+3) Пазовый метод + круглый тип         ---> плоская форма лучше на 124, интервал [161, 131], p-value = 0.
+
+3) Пазовый метод + шестиугольный тип   ---> плоская форма лучше на 166, интервал [156, 175], p-value = 0.
+
+##############################################################################
+Проведём двухфакторный дисперсионный анализ для вентиляторов с резьбовым методом соединения:
+
+```{r message=FALSE, warning=FALSE}
+aov_res5 <- aov(moment ~ type * form, data=subset(sample, method == "thread"))
+summary(aov_res5)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res5, type=1)
+```
+
+Значимое межфакторное взаимодействие отсутствует:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$method == "thread", ], interaction.plot(type, form, moment, xlab="type", ylab="moment"))
+with(sample[sample$method == "thread", ], interaction.plot(form, type, moment, xlab="form", ylab="moment"))
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res5, which="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res5, which="form")
+```
+
+Выводы следующие:
+
+1) Резьбовой метод ---> шестиугольный тип хуже на 12, интервал [-18, -7], p-value = 2.46e-05.
+
+2) Резьбовой метод ---> плоская форма лучше на 153, интервал [-147, -158], p-value = 0.
+
+##############################################################################
+Проведём двухфакторный дисперсионный анализ для вентиляторов с гладким барабаном:
+
+```{r message=FALSE, warning=FALSE}
+aov_res6 <- aov(moment ~ type * method, data=subset(sample, form == "plain"))
+summary(aov_res6)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res6, type=1)
+```
+
+Значимое межфакторное взаимодействие отсутствует:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$form == "plain", ], interaction.plot(type, method, moment, xlab="type", ylab="moment"))
+with(sample[sample$form == "plain", ], interaction.plot(method, type, moment, xlab="method", ylab="moment"))
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res6, which="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res6, which="method")
+```
+
+Выводы следующие:
+
+1) Плоская форма ---> шестиугольный тип хуже на 22, интервал [-29, -16], p-value = 1e-07.
+
+2) Плоская форма ---> резьбовой тип хуже на 35, интервал [-41, -28], p-value = 0.
+
+##############################################################################
+Проведём двухфакторный дисперсионный анализ для вентиляторов с гофрированным барабаном:
+
+```{r message=FALSE, warning=FALSE}
+aov_res7 <- aov(moment ~ type * method, data=subset(sample, form == "corrugated"))
+summary(aov_res7)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res7, type=1)
+```
+
+Присутствует значимое межфакторное взаимодействие:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=5, fig.width=10}
+par(mfrow=c(1,2))
+with(sample[sample$form == "corrugated", ], interaction.plot(type, method, moment, xlab="type", ylab="moment"))
+with(sample[sample$form == "corrugated", ], interaction.plot(method, type, moment, xlab="method", ylab="moment"))
+```
+
+Поэтому снова поделим выборку.
+
+Однофакторный анализ для вентиляторов с гофрированным барабаном и круглым отверстием:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "circle" & form == "corrugated"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res71 <- aov(moment ~ method, data=subset(sample, type == "circle" & form == "corrugated"))
+summary(aov_res71)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res71, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res71)
+```
+
+Однофакторный анализ для вентиляторов с гофрированным барабаном и шестиугольным отверстием:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ method, data=subset(sample, type == "hexagon" & form == "corrugated"), xlab="method")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res72 <- aov(moment ~ method, data=subset(sample, type == "hexagon" & form == "corrugated"))
+summary(aov_res72)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res72, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res72)
+```
+
+Однофакторный анализ для вентиляторов с гофрированным барабаном и пазовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ type, data=subset(sample, method == "groove" & form == "corrugated"), xlab="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res73 <- aov(moment ~ type, data=subset(sample, method == "groove" & form == "corrugated"))
+summary(aov_res73)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res73, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res73)
+```
+
+Однофакторный анализ для вентиляторов с гофрированным барабаном и резьбовым соединением:
+
+```{r results='hide', message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+boxplot(moment ~ type, data=subset(sample, method == "thread" & form == "corrugated"), xlab="type")
+```
+
+```{r message=FALSE, warning=FALSE}
+aov_res74 <- aov(moment ~ type, data=subset(sample, method == "thread" & form == "corrugated"))
+summary(aov_res74)
+```
+
+```{r message=FALSE, warning=FALSE}
+EtaSq(aov_res74, type=1)
+```
+
+```{r message=FALSE, warning=FALSE}
+TukeyHSD(aov_res74)
+```
+
+Выводы следующие:
+
+1) Гофрированная форма + круглый тип       ---> резьбовой метод хуже на 74, интервал [-80, -68], p-value = 0.
+
+2) Гофрированная форма + шестиугольный тип ---> резьбовой метод хуже на 12, интервал [-18, -6], p-value = 0.0008628.
+
+3) Гофрированная форма + пазовый метод     ---> шестиугольный тип хуже на 70, интервал [-75, -64], p-value = 0.
+
+3) Гофрированная форма + резьбовой метод   ---> шестиугольный тип хуже на 8, интервал [-14, -2], p-value = 0.0136423.
+
+##############################################################################
+
+Таким образом, в результате использования критериев Колмогорова-Смирнова и Андерсона-Дарлинга, была выявлена зависимость разрушающего крутящего момента для промышленных вентиляторов от метода соединения и формы барабана. Связь между разрушающим крутящим моментом и типом соединения не была ни доказана, ни опровергнута. Использование трёхфакторного дисперсионного анализа показало, что все факторы в совокупности оказывают влияние на разрушающий момент. В результате дополнительного анализа факторов было выявлено, что при прочих равных:
+
+- круглый тип отверстия даёт устойчивость выше, чем шестиугольный;
+
+- пазовый метод соединения даёт устойчивость выше, чем резьбовой;
+
+- гладкая форма барабана даёт устойчивость выше, чем гофрированная.

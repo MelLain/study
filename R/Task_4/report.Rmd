@@ -1,0 +1,220 @@
+---
+title: "Статистический анализ данных (Задание 4)"
+author: "Мурат Апишев, группа №417"
+date: "Среда, 9 апреля, 2015"
+output: html_document
+---
+#### Постановка
+В данном задании предлагается произвести сравнение моделей для прогнозирования временных рядов и использовать лучшую для решения задачи предсказания. Использоваться будут модели ETC и ARIMA.
+
+#### Данные
+Исходные данные представляют собой информацию о ежемесячном числе проданных автомобилей в городе Квебек в период с января 1960 по декабрь 1968. Указанный временной ряд содержит $12 * 9 = 108$ отсчётов. Визуальный вид данных:
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=5.5, fig.width=10}
+library(forecast)
+library(tseries)
+library(lmtest)
+library(Hmisc)
+
+data <- read.csv("data.csv", sep=",", stringsAsFactors=F)
+data <- head(data, -1)
+names(data)[1] <- "Date"
+names(data)[2] <- "Value"
+xname <- "Monthly Quebec car sales: number of cars"
+
+data$Value <- as.numeric(data$Value)
+data$Date <- as.Date(as.yearmon(data$Date, format="%Y-%m"))
+tSeries <- ts(data = data$Value, start = as.numeric(c(format(data$Date[1], "%Y"), format(data$Date[1], "%m"))), freq = 12)
+
+plot(tSeries, type="l", ylab=xname, col="red")
+grid()
+```
+Из графика можно сделать следующие выводы:
+
+* Выражена сезонность с периодом в $1$ год.
+* Пик продаж приходится примерно на середину года, минимумы --- на начало года и конец лета.
+* Выражен линейный возрастающий тренд.
+* Существенных выбросов не наблюдается.
+
+#### Преобразования ряда
+Попробуем поделить на число дней в месяце:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+plot(tSeries / monthDays(as.Date(time(tSeries))), type="l", ylab=xname, col="red")
+grid()
+```
+Ряд не стал более регулярным, так что вернёмся к исходным данным.
+
+Проверим необходимость применения преобразования Бокса-Кокса. Применим критерий гомоскедастичности Бройша-Пагана для исследования зависимости дисперсии от времени:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+bptest(Value ~ Date, data=data)
+```
+Видно, что дисперсия не зависит от времени, т.е. преобразование Бокса-Кокса можно не производить.
+
+Приняв допустимым уровнем значимости $0.05$, проведём исследование стационарности ряда с помощью критерия KPSS:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+kpss.test(tSeries)
+```
+Гипотеза о стационарности рассматриваемого ряда отвергается. Попробуем провести сезонное дифференцирование и проверить стационарность получаемого ряда:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+tSeriesOld <- tSeries
+tSeries <- diff(log(tSeries), 12)
+
+plot(tSeries, type="l", ylab=xname, col="red")
+grid()
+
+tsdisplay(tSeries)
+kpss.test(tSeries)
+```
+Видно, что гипотеза о стацинарности не овергается на уровне значимости более $0.1$, поэтому можно предполагать, что преобразованный ряд стационарен. Его будем использовать при настройке моделей ARIMA.
+
+#### ETS
+
+Обучим модель экспоненциального сглаживания на исходном ряде:
+```{r, echo=FALSE}
+fit_ets <- ets(tSeriesOld)
+print(fit_ets)
+```
+
+Остатки:
+```{r, echo=FALSE, fig.height=8, fig.width=10}
+tsdisplay(residuals(fit_ets))
+```
+
+Достигаемые уровни значимости критерия Льюнга-Бокса для них:
+
+```{r, echo=FALSE}
+p <- rep(0, 1, frequency(tSeriesOld)*3)
+for (i in 1:length(p)){
+  p[i] <- Box.test(residuals(fit_ets), lag=i, type = "Ljung-Box")$p.value
+}
+plot(p, xlab="Lag", ylab="P-value", ylim=c(0,1))
+abline(h = 0.05, lty = 2, col = "blue")
+```
+
+Q-Q plot и гистограмма для остатков:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+par(mfrow=c(1,2))
+qqnorm(residuals(fit_ets))
+qqline(residuals(fit_ets), col="red")
+hist(residuals(fit_ets))
+```
+
+Распределение имеет длинный правый хвост. Несмотря на наличие значимых лагов, p-values для критерия Льюнга-Бокса превосходят допустимый уровень значимости. Остатки удовлетворяют основным необходимым свойствам:
+
+Гипотеза           | Критерий      | Результат проверки | Достигаемый уровень значимости
+------------------ | ------------- | ------------------ | ------------------------------
+Нормальность       | Шапиро-Уилка  | не отвергается        | `r shapiro.test(residuals(fit_ets))$p.value`
+Несмещённость      | Уилкоксона    | не отвергается     | `r wilcox.test(residuals(fit_ets))$p.value`
+Стационарность     | KPSS          | не отвергается     | `r kpss.test(residuals(fit_ets))$p.value`
+Гомоскедастичность | Бройша-Пагана | не отвергается        | `r bptest(residuals(fit_ets) ~ c(1:length(residuals(fit_ets))))$p.value`
+
+####Arima
+Будем определять модель ARIMA исходя из визуального анализа ряда и вида его автокорреляционной функции.
+
+* PASF велико для лагов 1 и 2 --- добавим компоненту AR(2).
+* PASF отрицательна для лага 12 --- добавим компоненту SMA(1).
+
+Итак, строим модель ARIMA(2,0,0)(0,1,1)$_{12}$:
+```{r, echo=FALSE}
+fit <- Arima(tSeriesOld, order=c(2,0,0), seasonal=c(0,1,1))
+print(fit)
+```
+
+Остатки:
+```{r, echo=FALSE, fig.height=8, fig.width=10}
+tsdisplay(residuals(fit))
+```
+
+Достигаемые уровни значимости критерия Льюнга-Бокса для них:
+
+```{r, echo=FALSE}
+p <- rep(0, 1, frequency(tSeries)*3)
+for (i in 1:length(p)){
+  p[i] <- Box.test(residuals(fit), lag=i, type = "Ljung-Box")$p.value
+}
+plot(p, xlab="Lag", ylab="P-value", ylim=c(0,1))
+abline(h = 0.05, lty = 2, col = "blue")
+```
+
+Q-Q plot и гистограмма для остатков:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+par(mfrow=c(1,2))
+qqnorm(residuals(fit))
+qqline(residuals(fit), col="red")
+hist(residuals(fit))
+```
+
+Сравним теперь полученную модель с близкими ей по значению AIC$_c$ и выберем лучшую:
+
+| Модель                      | AIC$_c$
+| :--------------------------- | :-----------
+| ARIMA(2,0,0)(0,1,1)$_{12}$  | $1703$
+| ARIMA(1,0,0)(0,1,1)$_{12}$  | $1715$
+| ARIMA(3,0,0)(0,1,1)$_{12}$  | $1702$
+| ARIMA(2,0,1)(0,1,1)$_{12}$  | $1696$
+| ARIMA(2,0,2)(0,1,1)$_{12}$  | $1697$
+| ARIMA(2,0,0)(0,0,1)$_{12}$  | $1994$
+| ARIMA(2,0,1)(0,0,1)$_{12}$  | $1997$
+| ARIMA(2,0,0)(1,1,0)$_{12}$  | $1705$
+| ARIMA(2,0,0)(1,1,1)$_{12}$  | $1705$
+
+Моделей,существенно лучших ARIMA(2,0,0)(0,1,1)$_{12}$, не оказалось.Попробуем теперь построить модель автоматически и сравним результат с построенной выше вручную моделью:
+```{r, echo=FALSE, fig.height=8, fig.width=10}
+auto.arima(tSeriesOld)
+```
+Построенная автоматически модель оказалась лучше по AIC$_c$. 
+
+```{r, echo=FALSE, fig.height=8, fig.width=10}
+fit_arima <- auto.arima(tSeriesOld)
+```
+
+Проанализируем её остатки
+```{r, echo=FALSE, fig.height=8, fig.width=10}
+tsdisplay(residuals(fit_arima))
+```
+
+Достигаемые уровни значимости критерия Льюнга-Бокса для них:
+
+```{r, echo=FALSE}
+p <- rep(0, 1, frequency(tSeries)*3)
+for (i in 1:length(p)){
+  p[i] <- Box.test(residuals(fit_arima), lag=i, type = "Ljung-Box")$p.value
+}
+plot(p, xlab="Lag", ylab="P-value", ylim=c(0,1))
+abline(h = 0.05, lty = 2, col = "blue")
+```
+
+Q-Q plot и гистограмма для остатков:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+par(mfrow=c(1,2))
+qqnorm(residuals(fit_arima))
+qqline(residuals(fit_arima), col="red")
+hist(residuals(fit_arima))
+```
+
+Распределение имеет лёгкие хвосты. Несмотря на наличие значимых лагов, p-values для критерия Льюнга-Бокса превосходят допустимый уровень значимости. Остатки удовлетворяют некоторым основным необходимым свойствам:
+
+Гипотеза           | Критерий      | Результат проверки | Достигаемый уровень значимости
+------------------ | ------------- | ------------------ | ------------------------------
+Нормальность       | Шапиро-Уилка  | не отвергается        | `r shapiro.test(residuals(fit_arima))$p.value`
+Несмещённость      | Уилкоксона    | не отвергается     | `r wilcox.test(residuals(fit_arima))$p.value`
+Стационарность     | KPSS          | не отвергается     | `r kpss.test(residuals(fit_arima))$p.value`
+Гомоскедастичность | Бройша-Пагана | отвергается        | `r bptest(residuals(fit_arima) ~ c(1:length(residuals(fit_arima))))$p.value`
+
+
+####Сравнение моделей
+Сравним между собой модели, полученные с помощью ETS и ARIMA, с помощью критерия Диболда-Мариано. Альтернативная гипотеза --- вторая модель хуже первой. В качестве тестовой выборки возьмём значения продаж за последние полтора года (18 отсчётов), всё остальное используем для обучения:
+
+```{r, echo=FALSE, fig.height=8, fig.width=10,warning=FALSE}
+dm.test(residuals(fit_ets), residuals(fit_arima), alternative=c("l"))
+```
+Можно сделать предположение о том, что модель ETS оказалась лучше, чем ARIMA. Попробуем проверить противоположную альтернативную гипотезу:
+```{r, echo=FALSE, fig.height=8, fig.width=10,warning=FALSE}
+dm.test(residuals(fit_arima), residuals(fit_ets), alternative=c("l"))
+```
+p-value также высокое, значит, критерий Диболда-Мариано не может различить две модели. В таком случае возьмём ту, для которой меньше значение AIC$_c$, а это ARIMA (1481 против 2100).
+
+Используем итоговую модель ARIMA, обученную на всём исходном временном ряде для прогнозирования продаж на ближайшие два года:
+```{r, echo=FALSE, fig.height=5.5, fig.width=10}
+plot(forecast(fit_arima))
+```
