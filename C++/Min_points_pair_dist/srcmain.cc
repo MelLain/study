@@ -9,29 +9,42 @@ int main(int argc, char* argv[]) {
     }
 
     // read points
-    std::ifstream myfile;
-    myfile.open(argv[1]);
+    std::ifstream file_stream;
+    file_stream.open(argv[1]);
 
-    std::string str;
-    std::getline(myfile, str);
-    std::istringstream iss(str);
+    int num_points = 0;
+    TPoints points_x_y;
+    TPoints points_y_x;
+    while (!file_stream.eof()) {
+      std::string str;
+      std::getline(file_stream, str);
 
-    std::vector<std::string> coordinates{(std::istream_iterator<std::string>(iss)),
-                                         (std::istream_iterator<std::string>())};
+      if (str.empty())
+        continue;
 
-    int num_points = std::stoi(coordinates[0]);
-    TPoints points_x_y(num_points, std::make_pair(0.0f, 0.0f));
-    TPoints points_y_x(num_points, std::make_pair(0.0f, 0.0f));
+      std::istringstream iss(str);
+      std::vector<std::string> coordinates{ (std::istream_iterator<std::string>(iss)),
+        (std::istream_iterator<std::string>()) };
+      if (coordinates.size() == 1) {
+        num_points = std::stoi(coordinates[0]);
+      }
+      else if (coordinates.size() == 2){
+        points_x_y.push_back(std::make_pair(std::stof(coordinates[0]), std::stof(coordinates[1])));
+        points_y_x.push_back(std::make_pair(std::stof(coordinates[1]), std::stof(coordinates[0])));
+      }
+      else {
+        num_points = std::stoi(coordinates[0]);
 
-    int point_id = 0;
-    for (int i = 1; i < coordinates.size(); i += 2, ++point_id) {
-      points_x_y[point_id] = std::make_pair(std::stof(coordinates[i]), std::stof(coordinates[i + 1]));
-      points_y_x[point_id] = std::make_pair(std::stof(coordinates[i + 1]), std::stof(coordinates[i]));
+        for (int i = 1; i < coordinates.size(); i += 2) {
+          points_x_y.push_back(std::make_pair(std::stof(coordinates[i]), std::stof(coordinates[i + 1])));
+          points_y_x.push_back(std::make_pair(std::stof(coordinates[i + 1]), std::stof(coordinates[i])));
+        }
+        break;
+      }
     }
-
     // if there're too few points find the solution using brute force
     if (num_points <= MAX_POINTS_TO_BRUTE_FORCE) {
-      PrintResult(BruteForce(points_x_y.begin(), num_points), argv[1]);
+      PrintResult(BruteForce(points_x_y.begin(), points_x_y.end()), argv[1]);
       return 0;
     }
 
@@ -45,7 +58,7 @@ int main(int argc, char* argv[]) {
     points_y_x.assign(sort_result_y_x, sort_result_y_x + num_points);
 
     // find and print the common solution
-    PrintResult(FindMinDist(points_x_y.begin(), points_y_x.begin(), points_y_x.end(), 0, num_points), argv[1]);
+    PrintResult(FindMinDist(points_x_y.begin(), points_y_x, 0, num_points), argv[1]);
 
   } catch (std::exception& e) {
     std::cout << e.what() << std::endl;
