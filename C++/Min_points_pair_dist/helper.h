@@ -44,6 +44,7 @@ struct TResult {
   double dist;
 };
 
+void ReadPoints(TPoints* points_x_y, TPoints* points_y_x, std::string data_path);
 TPsIter MergeSort(TPsIter in_iter, TPsIter temp_iter, int left_bound, int right_bound);
 void PrintResult(const TResult& result, const std::string& data_path);
 double EuclidDist(const std::pair<double, double>& point_1, const std::pair<double, double>& point_2);

@@ -2,6 +2,40 @@
 
 namespace NLabAlgOne {
 
+void ReadPoints(TPoints* points_x_y, TPoints* points_y_x, std::string data_path) {
+  std::ifstream file_stream;
+  file_stream.open(data_path);
+
+  int num_points = 0;
+  while (!file_stream.eof()) {
+    std::string str;
+    std::getline(file_stream, str);
+
+    if (str.empty())
+      continue;
+
+    std::istringstream iss(str);
+    std::vector<std::string> coordinates{ (std::istream_iterator<std::string>(iss)),
+      (std::istream_iterator<std::string>()) };
+    if (coordinates.size() == 1) {
+      num_points = std::stoi(coordinates[0]);
+    }
+    else if (coordinates.size() == 2){
+      points_x_y->push_back(std::make_pair(std::stof(coordinates[0]), std::stof(coordinates[1])));
+      points_y_x->push_back(std::make_pair(std::stof(coordinates[1]), std::stof(coordinates[0])));
+    }
+    else {
+      num_points = std::stoi(coordinates[0]);
+
+      for (int i = 1; i < coordinates.size(); i += 2) {
+        points_x_y->push_back(std::make_pair(std::stof(coordinates[i]), std::stof(coordinates[i + 1])));
+        points_y_x->push_back(std::make_pair(std::stof(coordinates[i + 1]), std::stof(coordinates[i])));
+      }
+      break;
+    }
+  }
+}
+
 TPsIter MergeSort(TPsIter in_iter, TPsIter temp_iter, int left_bound, int right_bound) {
 
   if (left_bound == right_bound) {
