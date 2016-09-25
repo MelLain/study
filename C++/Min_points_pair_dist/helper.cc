@@ -2,7 +2,7 @@
 
 namespace NLabAlgOne {
 
-void ReadPoints(TPoints* points_x_y, TPoints* points_y_x, std::string data_path) {
+void ReadPoints(TPoints* points_x_y, std::string data_path) {
   std::ifstream file_stream;
   file_stream.open(data_path);
 
@@ -21,15 +21,13 @@ void ReadPoints(TPoints* points_x_y, TPoints* points_y_x, std::string data_path)
       num_points = std::stoi(coordinates[0]);
     }
     else if (coordinates.size() == 2){
-      points_x_y->push_back(std::make_pair(std::stof(coordinates[0]), std::stof(coordinates[1])));
-      points_y_x->push_back(std::make_pair(std::stof(coordinates[1]), std::stof(coordinates[0])));
+      points_x_y->push_back(std::make_pair(std::make_pair(std::stof(coordinates[0]), std::stof(coordinates[1])), 0));
     }
     else {
       num_points = std::stoi(coordinates[0]);
 
       for (int i = 1; i < coordinates.size(); i += 2) {
-        points_x_y->push_back(std::make_pair(std::stof(coordinates[i]), std::stof(coordinates[i + 1])));
-        points_y_x->push_back(std::make_pair(std::stof(coordinates[i + 1]), std::stof(coordinates[i])));
+        points_x_y->push_back(std::make_pair(std::make_pair(std::stof(coordinates[i]), std::stof(coordinates[i + 1])), 0));
       }
       break;
     }
@@ -74,8 +72,8 @@ TPsIter MergeSort(TPsIter in_iter, TPsIter temp_iter, int left_bound, int right_
 void PrintResult(const TResult& result, const std::string& data_path) {
   std::cout << "File = " << data_path << std::endl;
   for (int i = 0; i < result.points_1.size(); ++i) {
-    std::cout << "[ (" << result.points_1[i].first << ", " << result.points_1[i].second << "), ("
-              << result.points_2[i].first << ", " << result.points_2[i].second << ")]" << std::endl;
+    std::cout << "[ (" << result.points_1[i].first.first << ", " << result.points_1[i].first.second << "), ("
+              << result.points_2[i].first.first << ", " << result.points_2[i].first.second << ")]" << std::endl;
   }
   std::cout << "Value = " << result.dist << std::endl;
 }
@@ -89,7 +87,7 @@ TResult BruteForce(TPsIter x_y_begin, TPsIter x_y_end) {
   for (auto iter = x_y_begin; iter != x_y_end; ++iter) {
     auto local_iter = iter + 1;
     for (; local_iter != x_y_end; ++local_iter) {
-      double dist = EuclidDist(*iter, *local_iter);
+      double dist = EuclidDist(iter->first, local_iter->first);
       if (fabs(dist - result.dist) < EPS) {
         result.points_1.push_back(*iter);
         result.points_2.push_back(*local_iter);
@@ -127,28 +125,29 @@ TResult FindMinDist(TPsIter x_y_begin, const TPoints& y_x_points, int left_bound
   }
 
   for (int index = 0; index < y_x_points.size() - 1; ++index) {
-    if (y_x_points[index].second <= (x_y_begin + right_bound - 1)->first &&
-        y_x_points[index].second >= (x_y_begin + left_bound)->first) {
+    if (y_x_points[index].second < right_bound && y_x_points[index].second >= left_bound) {
       for (auto local_index = index + 1; local_index != (index + 7); ++local_index) {
         if (local_index >= y_x_points.size())
           break;
 
-        if ((y_x_points[local_index].second <= (x_y_begin + middle - 1)->first &&
-             y_x_points[index].second <= (x_y_begin + middle - 1)->first) ||
-            (y_x_points[local_index].second >= (x_y_begin + middle)->first &&
-             y_x_points[index].second >= (x_y_begin + middle)->first)) {
+        if ((y_x_points[local_index].second < middle && y_x_points[index].second < middle) ||
+            (y_x_points[local_index].second >= middle && y_x_points[index].second >= middle)) {
           continue;  // don't combine pairs from one part of array
         }
 
-        double cur_dist = EuclidDist(y_x_points[index], y_x_points[local_index]);
+        double cur_dist = EuclidDist(y_x_points[index].first, y_x_points[local_index].first);
         if (fabs(cur_dist - result.dist) < EPS) {
-          result.points_1.push_back(std::make_pair(y_x_points[index].second, y_x_points[index].first));
-          result.points_2.push_back(std::make_pair(y_x_points[local_index].second, y_x_points[local_index].first));
+          result.points_1.push_back(std::make_pair(std::make_pair(
+            y_x_points[index].first.second, y_x_points[index].first.first), y_x_points[index].second));
+          result.points_2.push_back(std::make_pair(std::make_pair(
+            y_x_points[local_index].first.second, y_x_points[local_index].first.first), y_x_points[local_index].second));
         } 
         else if (cur_dist < result.dist) {
           result.reset();
-          result.points_1.push_back(std::make_pair(y_x_points[index].second, y_x_points[index].first));
-          result.points_2.push_back(std::make_pair(y_x_points[local_index].second, y_x_points[local_index].first));
+          result.points_1.push_back(std::make_pair(std::make_pair(
+            y_x_points[index].first.second, y_x_points[index].first.first), y_x_points[index].second));
+          result.points_2.push_back(std::make_pair(std::make_pair(
+            y_x_points[local_index].first.second, y_x_points[local_index].first.first), y_x_points[local_index].second));
           result.dist = cur_dist;
         }
       }

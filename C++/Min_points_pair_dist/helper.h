@@ -13,11 +13,11 @@
 
 namespace NLabAlgOne {
 
-const double INF = 1e+20;
-const double EPS = 1e-20;
+const double INF = 1e+40;
+const double EPS = 1e-40;
 const int MAX_POINTS_TO_BRUTE_FORCE = 3;
 
-typedef std::vector<std::pair<double, double> > TPoints;
+typedef std::vector<std::pair<std::pair<double, double>, int> > TPoints;
 typedef TPoints::iterator TPsIter;
 
 struct TResult {
@@ -44,7 +44,7 @@ struct TResult {
   double dist;
 };
 
-void ReadPoints(TPoints* points_x_y, TPoints* points_y_x, std::string data_path);
+void ReadPoints(TPoints* points_x_y, std::string data_path);
 TPsIter MergeSort(TPsIter in_iter, TPsIter temp_iter, int left_bound, int right_bound);
 void PrintResult(const TResult& result, const std::string& data_path);
 double EuclidDist(const std::pair<double, double>& point_1, const std::pair<double, double>& point_2);

@@ -9,8 +9,7 @@ int main(int argc, char* argv[]) {
     }
 
     TPoints points_x_y;
-    TPoints points_y_x;
-    ReadPoints(&points_x_y, &points_y_x, argv[1]);
+    ReadPoints(&points_x_y, argv[1]);
     int num_points = points_x_y.size();
 
     // if there're too few points find the solution using brute force
@@ -20,10 +19,18 @@ int main(int argc, char* argv[]) {
     }
 
     // sort of the coordinates
-    TPoints temp_x(num_points, std::make_pair(0.0f, 0.0f));
-    auto sort_result_y_x = MergeSort(points_y_x.begin(), temp_x.begin(), 0, num_points - 1);
-    TPoints temp_y(num_points, std::make_pair(0.0f, 0.0f));
-    auto sort_result_x_y = MergeSort(points_x_y.begin(), temp_y.begin(), 0, num_points - 1);
+    TPoints temp_x(num_points, std::make_pair(std::make_pair(0.0f, 0.0f), 0));
+    auto sort_result_x_y = MergeSort(points_x_y.begin(), temp_x.begin(), 0, num_points - 1);
+    
+    TPoints points_y_x;
+    for (int i = 0; i < num_points; ++i) {
+      sort_result_x_y[i].second = i;
+      points_y_x.push_back(std::make_pair(std::make_pair(
+        sort_result_x_y[i].first.second, sort_result_x_y[i].first.first), sort_result_x_y[i].second));
+    }
+    
+    TPoints temp_y(num_points, std::make_pair(std::make_pair(0.0f, 0.0f), 0));
+    auto sort_result_y_x = MergeSort(points_y_x.begin(), temp_y.begin(), 0, num_points - 1);
 
     points_x_y.assign(sort_result_x_y, sort_result_x_y + num_points);
     points_y_x.assign(sort_result_y_x, sort_result_y_x + num_points);
