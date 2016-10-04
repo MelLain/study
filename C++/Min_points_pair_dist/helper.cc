@@ -124,30 +124,39 @@ TResult FindMinDist(TPsIter x_y_begin, const TPoints& y_x_points, int left_bound
     result = res_left.dist > res_right.dist ? res_right : res_left;
   }
 
-  for (int index = 0; index < y_x_points.size() - 1; ++index) {
-    if (y_x_points[index].second < right_bound && y_x_points[index].second >= left_bound) {
+  TPoints current_delta_strip;
+  for (int index = 0; index < y_x_points.size(); ++index) {
+    if (std::fabs((x_y_begin + middle)->first.first - y_x_points[index].first.second) <= result.dist) {
+      current_delta_strip.push_back(y_x_points[index]);
+    }
+  }
+
+  for (int index = 0; index < current_delta_strip.size(); ++index) {
+    if (current_delta_strip[index].second < right_bound && current_delta_strip[index].second >= left_bound) {
       for (auto local_index = index + 1; local_index != (index + 7); ++local_index) {
-        if (local_index >= y_x_points.size())
+        if (local_index >= current_delta_strip.size())
           break;
 
-        if ((y_x_points[local_index].second < middle && y_x_points[index].second < middle) ||
-            (y_x_points[local_index].second >= middle && y_x_points[index].second >= middle)) {
+        if ((current_delta_strip[local_index].second < middle && current_delta_strip[index].second < middle) ||
+          (current_delta_strip[local_index].second >= middle && current_delta_strip[index].second >= middle)) {
           continue;  // don't combine pairs from one part of array
         }
 
-        double cur_dist = EuclidDist(y_x_points[index].first, y_x_points[local_index].first);
+        double cur_dist = EuclidDist(current_delta_strip[index].first, current_delta_strip[local_index].first);
         if (fabs(cur_dist - result.dist) < EPS) {
           result.points_1.push_back(std::make_pair(std::make_pair(
-            y_x_points[index].first.second, y_x_points[index].first.first), y_x_points[index].second));
+            current_delta_strip[index].first.second, current_delta_strip[index].first.first), current_delta_strip[index].second));
           result.points_2.push_back(std::make_pair(std::make_pair(
-            y_x_points[local_index].first.second, y_x_points[local_index].first.first), y_x_points[local_index].second));
+            current_delta_strip[local_index].first.second, current_delta_strip[local_index].first.first),
+            current_delta_strip[local_index].second));
         } 
         else if (cur_dist < result.dist) {
           result.reset();
           result.points_1.push_back(std::make_pair(std::make_pair(
-            y_x_points[index].first.second, y_x_points[index].first.first), y_x_points[index].second));
+            current_delta_strip[index].first.second, current_delta_strip[index].first.first), current_delta_strip[index].second));
           result.points_2.push_back(std::make_pair(std::make_pair(
-            y_x_points[local_index].first.second, y_x_points[local_index].first.first), y_x_points[local_index].second));
+            current_delta_strip[local_index].first.second, current_delta_strip[local_index].first.first),
+            current_delta_strip[local_index].second));
           result.dist = cur_dist;
         }
       }
