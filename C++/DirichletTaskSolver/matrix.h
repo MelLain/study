@@ -6,6 +6,8 @@
 #include "common.h"
 #include "grid.h"
 
+namespace DTS {
+
 template <typename T>
 class Matrix {
  public:
@@ -52,7 +54,7 @@ class Matrix {
 
   std::shared_ptr<Matrix<T> > operator+(const Matrix<T>& rhs) const {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
-      throw std::exception("Matrix::operator+: inconsistent sizes of matrices");
+      throw std::runtime_error("Matrix::operator+: inconsistent sizes of matrices");
     }
     auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
 
@@ -70,7 +72,7 @@ class Matrix {
 
   std::shared_ptr<Matrix<T> > operator-(const Matrix<T>& rhs) const {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
-      throw std::exception("Matrix::operator-: inconsistent sizes of matrices");
+      throw std::runtime_error("Matrix::operator-: inconsistent sizes of matrices");
     }
     auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
 
@@ -88,7 +90,7 @@ class Matrix {
 
   std::shared_ptr<Matrix<T> > operator*(const Matrix<T>& rhs) const {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
-      throw std::exception("Matrix::operator*: inconsistent sizes of matrices");
+      throw std::runtime_error("Matrix::operator*: inconsistent sizes of matrices");
     }
     auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
 
@@ -131,7 +133,7 @@ class Matrix {
     double retval = 0.0;
 
     if (src_1.num_cols() != src_2.num_cols() || src_1.num_rows() != src_2.num_rows()) {
-      throw std::exception("Matrix::ProductByPointAndSum: inconsistent sizes of matrices");
+      throw std::runtime_error("Matrix::ProductByPointAndSum: inconsistent sizes of matrices");
     }
 
     for (int i = 0; i < src_1.num_cols(); ++i) {
@@ -156,3 +158,5 @@ class Matrix {
   int num_cols_;
   std::vector<std::vector<T> > data_;
 };
+
+}  // namespace DTS

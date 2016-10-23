@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+namespace DTS {
+
 struct Point {
   double height;
   double width;
@@ -46,3 +48,5 @@ class Grid {
   double step_height_;
   double step_width_;
 };
+
+}  // namespace DTS

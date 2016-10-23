@@ -1,12 +1,17 @@
+#include <ctime>
+
 #include <iomanip>
 #include <fstream>
 #include <memory>
 #include <vector>
+#include <string>
 
 #include "common.h"
 #include "matrix.h"
 #include "grid.h"
 #include "gradient_descent.h"
+
+using namespace DTS;
 
 void PrintResults(const DM& values, const Grid& grid, Functions functions, const std::vector<double>& errors) {
   std::ofstream out_file;
@@ -35,9 +40,20 @@ void PrintResults(const DM& values, const Grid& grid, Functions functions, const
   out_file.close();
 }
 
+const std::string HELP_STR = "usage: ./srcmain <grid_size>";
+
 int main(int argc, char* argv[]) {
+  const clock_t begin_time = clock();
   try {
-    Grid grid = Grid({ 0, 2, 0, 2 }, 20, 20);
+    int grid_size = 0;
+    if (argc != 2) {
+      std::cout << HELP_STR << std::endl;
+      return ARG_PARSE_ERROR;
+    } else {
+      grid_size = std::stoi(argv[1]);
+    }
+
+    Grid grid = Grid({ 0, 2, 0, 2 }, grid_size, grid_size);
     Functions functions = { [](const Point& p){ return (p.width * p.width +
                                                         p.height * p.height) * sin(p.height * p.width); },
                             [](const Point& p){ return 1.0 + sin(p.height * p.width); },
@@ -51,7 +67,8 @@ int main(int argc, char* argv[]) {
     std::cout << e.what();
   }
 
-  std::cout << "Finished! Press any key to continue..." << std::endl;
+  std::cout << "Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl;
+  std::cout << "Press any key to continue..." << std::endl;
   getchar();
   return 0;
 }

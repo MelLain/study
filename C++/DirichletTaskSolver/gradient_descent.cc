@@ -1,20 +1,24 @@
 #include "gradient_descent.h"
 
-std::shared_ptr<DM> CreateInitMatrix(const Grid& grid, Func bound_func) {
-  auto retval = std::shared_ptr<DM>(new DM(grid.num_width_points(), grid.num_height_points(), RAND_CONST));
+namespace DTS {
 
-  for (int i = 0; i < grid.num_height_points(); ++i) {
-    (*retval)(0, i) = bound_func(grid(0, i));
-    (*retval)(grid.num_width_points() - 1, i) = bound_func(grid(grid.num_width_points() - 1, i));
+  namespace {
+    std::shared_ptr<DM> CreateInitMatrix(const Grid& grid, Func bound_func) {
+      auto retval = std::shared_ptr<DM>(new DM(grid.num_width_points(), grid.num_height_points(), RAND_CONST));
+
+      for (int i = 0; i < grid.num_height_points(); ++i) {
+        (*retval)(0, i) = bound_func(grid(0, i));
+        (*retval)(grid.num_width_points() - 1, i) = bound_func(grid(grid.num_width_points() - 1, i));
+      }
+
+      for (int i = 0; i < grid.num_width_points(); ++i) {
+        (*retval)(i, 0) = bound_func(grid(i, 0));
+        (*retval)(i, grid.num_height_points() - 1) = bound_func(grid(i, grid.num_height_points() - 1));
+      }
+
+      return retval;
+    }
   }
-
-  for (int i = 0; i < grid.num_width_points(); ++i) {
-    (*retval)(i, 0) = bound_func(grid(i, 0));
-    (*retval)(i, grid.num_height_points() - 1) = bound_func(grid(i, grid.num_height_points() - 1));
-  }
-
-  return retval;
-}
 
 GradientDescent::GradientDescent(const Grid& grid, const Functions& functions)
   : grid_(grid)
@@ -71,7 +75,8 @@ std::shared_ptr<DM> GradientDescent::count_residuals() const {
 
   for (int i = 0; i < residuals->num_rows(); ++i) {
     for (int j = 0; j < residuals->num_cols(); ++j) {
-      (*residuals)(i, j) = grid_.isBoundPoint({ i, j }) ? 0.0 : (*value_lap)(i, j) - functions_.main_func(grid_(i, j));
+      (*residuals)(i, j) = grid_.isBoundPoint({ static_cast<double>(i), static_cast<double>(j) }) ? 0.0 :
+        (*value_lap)(i, j) - functions_.main_func(grid_(i, j));
     }
   }
 
@@ -110,3 +115,6 @@ bool GradientDescent::finished() const {
   auto difference = *values_ - *old_values_;
   return sqrt(DM::ProductByPointAndSum(*difference, *difference, grid_)) < EPS;
 }
+
+
+}  // namespace DTS

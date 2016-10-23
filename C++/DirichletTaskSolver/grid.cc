@@ -1,5 +1,7 @@
 #include "grid.h"
 
+namespace DTS {
+
 Grid::Grid(const Bounds& bounds, int num_height_points, int num_width_points)
   : bounds_(bounds)
   , num_height_points_(num_height_points + 1)
@@ -25,3 +27,5 @@ void Grid::debug_print() const {
     std::cout << std::endl;
   }
 }
+
+}  // namespace DTS

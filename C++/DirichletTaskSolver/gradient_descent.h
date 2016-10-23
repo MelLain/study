@@ -7,6 +7,8 @@
 #include "matrix.h"
 #include "grid.h"
 
+namespace DTS {
+
 typedef double(*Func)(const Point& point);
 typedef Matrix<double> DM;
 
@@ -15,8 +17,6 @@ struct Functions {
   Func bound_func;
   Func true_func;
 };
-
-std::shared_ptr<DM> CreateInitMatrix(const Grid& grid, Func bound_func);
 
 class GradientDescent {
  public:
@@ -58,3 +58,5 @@ class GradientDescent {
 
   std::vector<double> error_by_iter_;
 };
+
+}  // namespace DTS
