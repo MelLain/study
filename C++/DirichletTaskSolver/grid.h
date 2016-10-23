@@ -22,20 +22,20 @@ struct Bounds {
 
 class Grid {
  public:
-   Grid(const Bounds& bounds, int num_height_points, int num_width_points);
+   Grid(const Bounds& bounds, size_t num_height_points, size_t num_width_points);
 
   double height_lower_bound() const { return bounds_.height_lower_bound; };
   double height_upper_bound() const { return bounds_.height_upper_bound; };
   double width_lower_bound() const { return bounds_.width_lower_bound; };
   double width_upper_bound() const { return bounds_.width_upper_bound; };
 
-  int num_width_points() const { return num_width_points_; }
-  int num_height_points() const { return num_height_points_; }
+  size_t num_width_points() const { return num_width_points_; }
+  size_t num_height_points() const { return num_height_points_; }
 
   double step_height() const { return step_height_; }
   double step_width() const { return step_width_; }
 
-  Point operator()(int row, int col) const;
+  Point operator()(size_t row, size_t col) const;
 
   bool isBoundPoint(const Point& p) const;
 
@@ -43,8 +43,8 @@ class Grid {
 
  private:
   Bounds bounds_;
-  int num_height_points_;
-  int num_width_points_;
+  size_t num_height_points_;
+  size_t num_width_points_;
   double step_height_;
   double step_width_;
 };

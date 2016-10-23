@@ -44,7 +44,7 @@ class GradientDescent {
 
    double count_error() const;
    bool finished() const;
-   int num_processed_iters() const { return error_by_iter_.size(); }
+   size_t num_processed_iters() const { return error_by_iter_.size(); }
 
   Grid grid_;
   Functions functions_;

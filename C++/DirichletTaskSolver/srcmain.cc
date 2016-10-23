@@ -16,8 +16,8 @@ using namespace DTS;
 void PrintResults(const DM& values, const Grid& grid, Functions functions, const std::vector<double>& errors) {
   std::ofstream out_file;
   out_file.open(OUT_VALUE_FILE);
-  for (int i = 0; i < values.num_rows(); ++i) {
-    for (int j = 0; j < values.num_cols(); ++j) {
+  for (size_t i = 0; i < values.num_rows(); ++i) {
+    for (size_t j = 0; j < values.num_cols(); ++j) {
       out_file << std::setw(10) << values(i, j);
     }
     out_file << std::endl;
@@ -25,8 +25,8 @@ void PrintResults(const DM& values, const Grid& grid, Functions functions, const
   out_file.close();
 
   out_file.open(OUT_TRUE_FILE);
-  for (int i = 0; i < grid.num_height_points(); ++i) {
-    for (int j = 0; j < grid.num_width_points(); ++j) {
+  for (size_t i = 0; i < grid.num_height_points(); ++i) {
+    for (size_t j = 0; j < grid.num_width_points(); ++j) {
       out_file << std::setw(10) << functions.true_func(grid(i, j));
     }
     out_file << std::endl;

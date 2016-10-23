@@ -6,12 +6,12 @@ namespace DTS {
     std::shared_ptr<DM> CreateInitMatrix(const Grid& grid, Func bound_func) {
       auto retval = std::shared_ptr<DM>(new DM(grid.num_width_points(), grid.num_height_points(), RAND_CONST));
 
-      for (int i = 0; i < grid.num_height_points(); ++i) {
+      for (size_t i = 0; i < grid.num_height_points(); ++i) {
         (*retval)(0, i) = bound_func(grid(0, i));
         (*retval)(grid.num_width_points() - 1, i) = bound_func(grid(grid.num_width_points() - 1, i));
       }
 
-      for (int i = 0; i < grid.num_width_points(); ++i) {
+      for (size_t i = 0; i < grid.num_width_points(); ++i) {
         (*retval)(i, 0) = bound_func(grid(i, 0));
         (*retval)(i, grid.num_height_points() - 1) = bound_func(grid(i, grid.num_height_points() - 1));
       }
@@ -27,8 +27,8 @@ GradientDescent::GradientDescent(const Grid& grid, const Functions& functions)
   clear();
   values_ = CreateInitMatrix(grid, functions.bound_func);
 
-  int h = grid.num_height_points();
-  int w = grid.num_width_points();
+  size_t h = grid.num_height_points();
+  size_t w = grid.num_width_points();
   old_values_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
   gradients_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
   old_gradients_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
@@ -73,8 +73,8 @@ std::shared_ptr<DM> GradientDescent::count_residuals() const {
   auto value_lap = DM::FivePointsLaplass(*values_, grid_);
   auto residuals = std::shared_ptr<DM>(new DM(grid_.num_height_points(), grid_.num_width_points(), 0.0));
 
-  for (int i = 0; i < residuals->num_rows(); ++i) {
-    for (int j = 0; j < residuals->num_cols(); ++j) {
+  for (size_t i = 0; i < residuals->num_rows(); ++i) {
+    for (size_t j = 0; j < residuals->num_cols(); ++j) {
       (*residuals)(i, j) = grid_.isBoundPoint({ static_cast<double>(i), static_cast<double>(j) }) ? 0.0 :
         (*value_lap)(i, j) - functions_.main_func(grid_(i, j));
     }
@@ -102,8 +102,8 @@ void GradientDescent::count_new_values(double tau) {
 double GradientDescent::count_error() const {
   auto psi = *values_;
 
-  for (int i = 0; i < psi.num_rows(); ++i) {
-    for (int j = 0; j < psi.num_cols(); ++j) {
+  for (size_t i = 0; i < psi.num_rows(); ++i) {
+    for (size_t j = 0; j < psi.num_cols(); ++j) {
       psi(i, j) = functions_.true_func(grid_(i, j)) - psi(i, j);
     }
   }
