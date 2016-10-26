@@ -136,8 +136,8 @@ class Matrix {
       throw std::runtime_error("Matrix::ProductByPointAndSum: inconsistent sizes of matrices");
     }
 
-    for (size_t i = 0; i < src_1.num_cols(); ++i) {
-      for (size_t j = 0; j < src_2.num_rows(); ++j) {
+    for (size_t i = 0; i < src_1.num_rows(); ++i) {
+      for (size_t j = 0; j < src_2.num_cols(); ++j) {
         retval += grid.step_height() * grid.step_width() * src_1(i, j) * src_2(i, j);
       }
     }

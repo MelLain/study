@@ -29,11 +29,11 @@ GradientDescent::GradientDescent(const Grid& grid, const Functions& functions)
 
   size_t h = grid.num_height_points();
   size_t w = grid.num_width_points();
-  old_values_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
-  gradients_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
-  old_gradients_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
-  gradients_laplass_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
-  old_gradients_laplass_ = std::shared_ptr<DM>(new DM(h, w, 0.0));
+  old_values_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
+  gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
+  old_gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
+  gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
+  old_gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
 }
 
 void GradientDescent::FitModel() {
@@ -43,6 +43,7 @@ void GradientDescent::FitModel() {
     auto residuals_lap = DM::FivePointsLaplass(*residuals, grid_);
 
     count_new_gradients(*residuals, *residuals_lap, first_iter);
+    residuals_lap->clear();  // free memory
     first_iter = false;
 
     *old_gradients_laplass_ = *gradients_laplass_;
