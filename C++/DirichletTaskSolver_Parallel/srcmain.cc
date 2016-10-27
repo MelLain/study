@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
-    Grid grid = Grid({ 0, 2, 0, 2 }, grid_size, grid_size);
+    Grid grid = Grid({ 0, 1, 0, 1 }, grid_size, grid_size, 1.5);
     Functions functions = { [](const Point& p){ return (p.width * p.width +
                                                         p.height * p.height) * sin(p.height * p.width); },
                             [](const Point& p){ return 1.0 + sin(p.height * p.width); },

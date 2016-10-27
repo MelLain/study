@@ -5,24 +5,24 @@
 namespace DTS {
 
 struct Point {
-  double height;
   double width;
+  double height;
 
   friend std::ostream& operator<<(std::ostream& out, const Point& p) {
-    return out << "(" << p.height << ", " << p.width << ")";
+    return out << "(" << p.width << ", " << p.height << ")";
   }
 };
 
 struct Bounds {
-  double height_lower_bound;
-  double height_upper_bound;
   double width_lower_bound;
   double width_upper_bound;
+  double height_lower_bound;
+  double height_upper_bound;
 };
 
 class Grid {
  public:
-   Grid(const Bounds& bounds, size_t num_height_points, size_t num_width_points);
+  Grid(const Bounds& bounds, size_t num_width_points, size_t num_height_points, double multiplier);
 
   double height_lower_bound() const { return bounds_.height_lower_bound; };
   double height_upper_bound() const { return bounds_.height_upper_bound; };
@@ -32,8 +32,8 @@ class Grid {
   size_t num_width_points() const { return num_width_points_; }
   size_t num_height_points() const { return num_height_points_; }
 
-  double step_height() const { return step_height_; }
-  double step_width() const { return step_width_; }
+  double step_height(size_t col) const;
+  double step_width(size_t row) const;
 
   Point operator()(size_t row, size_t col) const;
 
@@ -43,10 +43,11 @@ class Grid {
 
  private:
   Bounds bounds_;
-  size_t num_height_points_;
   size_t num_width_points_;
-  double step_height_;
-  double step_width_;
+  size_t num_height_points_;
+  double multiplier_;
+  double step_width_0_;
+  double step_height_0_;
 };
 
 }  // namespace DTS

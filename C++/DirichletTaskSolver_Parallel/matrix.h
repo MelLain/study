@@ -121,12 +121,12 @@ class Matrix {
 
     for (size_t i = 1; i < retval->num_rows() - 1; ++i) {
       for (size_t j = 1; j < retval->num_cols() - 1; ++j) {
-        double part_1 = (src(i, j) - src(i - 1, j)) / grid.step_height() -
-                        (src(i + 1, j) - src(i, j)) / grid.step_height();
-        double part_2 = (src(i, j) - src(i, j - 1)) / grid.step_width() -
-                        (src(i, j + 1) - src(i, j)) / grid.step_width();
+        double part_1 = (src(i, j) - src(i - 1, j)) / grid.step_width(i) -
+                        (src(i + 1, j) - src(i, j)) / grid.step_width(i + 1);
+        double part_2 = (src(i, j) - src(i, j - 1)) / grid.step_height(j) -
+                        (src(i, j + 1) - src(i, j)) / grid.step_height(j + 1);
 
-        (*retval)(i, j) = part_1 / grid.step_height() + part_2 / grid.step_width();
+        (*retval)(i, j) = part_1 / grid.step_width(i) + part_2 / grid.step_height(j);
       }
     }
 
@@ -144,7 +144,7 @@ class Matrix {
     size_t end_shift = (proc_type == LOWER_PROC || proc_type == GLOBAL_PROC) ? 0 : 1;
     for (size_t i = start_shift; i < src_1.num_rows() - end_shift; ++i) {
       for (size_t j = 0; j < src_1.num_cols(); ++j) {
-        retval += grid.step_height() * grid.step_width() * src_1(i, j) * src_2(i, j);
+        retval += grid.step_width(i) * grid.step_height(j) * src_1(i, j) * src_2(i, j);
       }
     }
 

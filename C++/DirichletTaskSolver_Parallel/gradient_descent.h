@@ -26,11 +26,11 @@ class GradientDescent {
   const DM& GetCurrentMatrix() const { return *values_; }
 
   void clear() {
-    values_ = nullptr;
-    old_values_ = nullptr;
-    gradients_ = nullptr;
-    gradients_laplass_ = nullptr;
-    old_gradients_laplass_ = nullptr;
+    values_.reset();
+    old_values_.reset();
+    gradients_.reset();
+    gradients_laplass_.reset();
+    old_gradients_laplass_.reset();
   }
 
  private:
