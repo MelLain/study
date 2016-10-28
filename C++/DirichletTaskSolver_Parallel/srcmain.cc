@@ -98,9 +98,9 @@ int main(int argc, char* argv[]) {
         send_value_to_all(num_processors, tau_nom);
 
         // wait for the end of the iteration and collect errors
-        double not_finished = collect_value_from_all(num_processors);
+        double difference = sqrt(collect_value_from_all(num_processors));
 
-        if (not_finished < EPS) {
+        if (difference < EPS) {
 	  send_flag_to_all(num_processors, TERMINATE);
 
           // receive results

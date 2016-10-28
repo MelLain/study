@@ -38,7 +38,7 @@ class GradientDescent {
   void count_new_values(double tau);
 
   double count_pre_error() const;
-  bool finished() const;
+  double values_difference() const;
 
   std::shared_ptr<DM> init_values();
   void exchange_mirror_rows(std::shared_ptr<DM> values);

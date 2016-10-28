@@ -92,8 +92,8 @@ void GradientDescent::FitModel() {
     // step 6: count new values
     count_new_values(tau);
 
-    // step 7: send finished to master and finish iter
-    send_value(finished() ? 0.0 : 1.0, 0, proc_rank_);
+    // step 7: send difference to master and finish iter
+    send_value(values_difference(), 0, proc_rank_);
   }
 }
 
@@ -130,9 +130,9 @@ double GradientDescent::count_pre_error() const {
     return DM::ProductByPointAndSum(psi, psi, grid_, proc_type_);
 }
 
-bool GradientDescent::finished() const {
+double GradientDescent::values_difference() const {
   auto difference = *values_ - *old_values_;
-  return sqrt(DM::ProductByPointAndSum(*difference, *difference, grid_, proc_type_)) < EPS;
+  return DM::ProductByPointAndSum(*difference, *difference, grid_, proc_type_);
 }
 
 std::shared_ptr<DM> GradientDescent::init_values() {
