@@ -126,7 +126,8 @@ class Matrix {
         double part_2 = (src(i, j) - src(i, j - 1)) / grid.step_height(j) -
                         (src(i, j + 1) - src(i, j)) / grid.step_height(j + 1);
 
-        (*retval)(i, j) = part_1 / grid.step_width(i) + part_2 / grid.step_height(j);
+        (*retval)(i, j) = 2 * part_1 / (grid.step_width(i) + grid.step_width(i + 1)) +
+                          2 * part_2 / (grid.step_height(j) + grid.step_height(j + 1));
       }
     }
 
@@ -144,7 +145,7 @@ class Matrix {
     size_t end_shift = (proc_type == LOWER_PROC || proc_type == GLOBAL_PROC) ? 0 : 1;
     for (size_t i = start_shift; i < src_1.num_rows() - end_shift; ++i) {
       for (size_t j = 0; j < src_1.num_cols(); ++j) {
-        retval += grid.step_width(i) * grid.step_height(j) * src_1(i, j) * src_2(i, j);
+        retval += 0.25 * (grid.step_width(i) + grid.step_width(i + 1)) * (grid.step_height(j) + grid.step_height(j + 1)) * src_1(i, j) * src_2(i, j);
       }
     }
 
