@@ -48,13 +48,13 @@ int main(int argc, char* argv[]) {
   const clock_t begin_time = clock();
   int rank = 0;
 
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  int num_processors = 0;
+  MPI_Comm_size(MPI_COMM_WORLD, &num_processors);
+
   try {
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    int num_processors = 0;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_processors);
-
     if (num_processors < 2) {
       throw std::runtime_error("Invalid number of procs (< 2)");
     }
