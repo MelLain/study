@@ -135,7 +135,7 @@ class Matrix {
   }
 
   static double ProductByPointAndSum(const Matrix<double>& src_1, const Matrix<double>& src_2,
-				     const Grid& grid, ProcType proc_type = GLOBAL_PROC, size_t start_index = 0) {
+    const Grid& grid, ProcType proc_type = GLOBAL_PROC, size_t start_index = 0) {
     double retval = 0.0;
 
     if (src_1.num_cols() != src_2.num_cols() || src_1.num_rows() != src_2.num_rows()) {
