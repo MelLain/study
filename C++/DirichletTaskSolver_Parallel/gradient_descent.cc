@@ -38,16 +38,14 @@ void GradientDescent::FitModel() {
       break;
     }
 
-    exchange_mirror_rows(values_);
-
     // step 1: count residuals
     auto residuals = count_residuals();
-    auto residuals_lap = DM::FivePointsLaplass(*residuals, grid_);
+    auto residuals_lap = DM::FivePointsLaplass(*residuals, grid_, start_index_);
     exchange_mirror_rows(residuals_lap);
 
     // step 2: count alpha
-    double alpha_den_part = DM::ProductByPointAndSum(*old_gradients_laplass_, *old_gradients_, grid_, proc_type_);
-    double alpha_nom_part =  DM::ProductByPointAndSum(*residuals_lap, *old_gradients_, grid_, proc_type_);
+    double alpha_den_part = DM::ProductByPointAndSum(*old_gradients_laplass_, *old_gradients_, grid_, proc_type_, start_index_);
+    double alpha_nom_part =  DM::ProductByPointAndSum(*residuals_lap, *old_gradients_, grid_, proc_type_, start_index_);
 
     send_value(alpha_den_part, 0, proc_rank_);
     double alpha_den;
@@ -70,12 +68,12 @@ void GradientDescent::FitModel() {
 
     // step 4: count new gradients laplass
     *old_gradients_laplass_ = *gradients_laplass_;
-    gradients_laplass_ = DM::FivePointsLaplass(*gradients_, grid_);
+    gradients_laplass_ = DM::FivePointsLaplass(*gradients_, grid_, start_index_);
     exchange_mirror_rows(gradients_laplass_);
     
     // step 5: count tau
-    double tau_den_part = DM::ProductByPointAndSum(*gradients_laplass_, *gradients_, grid_, proc_type_);
-    double tau_nom_part = DM::ProductByPointAndSum(*residuals, *gradients_, grid_, proc_type_);
+    double tau_den_part = DM::ProductByPointAndSum(*gradients_laplass_, *gradients_, grid_, proc_type_, start_index_);
+    double tau_nom_part = DM::ProductByPointAndSum(*residuals, *gradients_, grid_, proc_type_, start_index_);
 
     send_value(tau_den_part, 0, proc_rank_);
     double tau_den;
@@ -87,7 +85,7 @@ void GradientDescent::FitModel() {
 
     double tau = tau_den > 0.0 ? tau_nom / tau_den : 0.0;
 
-    residuals->clear();  // free memory
+    //residuals->clear();  // free memory
 
     // step 6: count new values
     count_new_values(tau);
@@ -100,7 +98,7 @@ void GradientDescent::FitModel() {
 std::shared_ptr<DM> GradientDescent::count_residuals() {
   auto residuals = std::shared_ptr<DM>(new DM(values_->num_rows(), values_->num_cols(), 0.0));
 
-  auto value_lap = DM::FivePointsLaplass(*values_, grid_);
+  auto value_lap = DM::FivePointsLaplass(*values_, grid_, start_index_);
   exchange_mirror_rows(value_lap);
 
   for (size_t i = 0; i < residuals->num_rows(); ++i) {
@@ -119,20 +117,20 @@ void GradientDescent::count_new_values(double tau) {
 }
 
 double GradientDescent::count_pre_error() const {
-    auto psi = *values_;
+  auto psi = *values_;
 
-    for (size_t i = 0; i < psi.num_rows(); ++i) {
-      for (size_t j = 0; j < psi.num_cols(); ++j) {
-        psi(i, j) = functions_.true_func(grid_(i + start_index_, j)) - (*values_)(i, j);
-      }
+  for (size_t i = 0; i < psi.num_rows(); ++i) {
+    for (size_t j = 0; j < psi.num_cols(); ++j) {
+      psi(i, j) = functions_.true_func(grid_(i + start_index_, j)) - (*values_)(i, j);
     }
+  }
 
-    return DM::ProductByPointAndSum(psi, psi, grid_, proc_type_);
+  return DM::ProductByPointAndSum(psi, psi, grid_, proc_type_, start_index_);
 }
 
 double GradientDescent::values_difference() const {
   auto difference = *values_ - *old_values_;
-  return DM::ProductByPointAndSum(*difference, *difference, grid_, proc_type_);
+  return DM::ProductByPointAndSum(*difference, *difference, grid_, proc_type_, start_index_);
 }
 
 std::shared_ptr<DM> GradientDescent::init_values() {
