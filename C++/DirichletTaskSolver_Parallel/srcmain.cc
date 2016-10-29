@@ -141,5 +141,6 @@ int main(int argc, char* argv[]) {
     std::cout << rank << " : " << e.what() << std::endl;
   }
 
+  MPI_Finalize();
   return 0;
 }
