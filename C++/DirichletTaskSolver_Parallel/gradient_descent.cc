@@ -61,7 +61,7 @@ void GradientDescent::FitModel() {
     old_gradients_.swap(gradients_);
     if (first_iter) {
       *gradients_ = *residuals;
-      //first_iter = false;
+      first_iter = false;
     } else {
       gradients_ = *residuals - *residuals_lap * alpha;
     }
@@ -85,7 +85,7 @@ void GradientDescent::FitModel() {
 
     double tau = tau_den > 0.0 ? tau_nom / tau_den : 0.0;
 
-    //residuals->clear();  // free memory
+    residuals->clear();  // free memory
 
     // step 6: count new values
     count_new_values(tau);
