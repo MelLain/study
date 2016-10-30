@@ -31,7 +31,6 @@ GradientDescent::GradientDescent(const Grid& grid, const Functions& functions)
   size_t w = grid.num_width_points();
   old_values_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
-  old_gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   old_gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
 }
@@ -39,6 +38,7 @@ GradientDescent::GradientDescent(const Grid& grid, const Functions& functions)
 void GradientDescent::FitModel() {
   bool first_iter = true;
   while (true) {
+    *old_gradients_laplass_ = *gradients_laplass_;
     auto residuals = count_residuals();
     auto residuals_lap = DM::FivePointsLaplass(*residuals, grid_);
 
@@ -46,7 +46,6 @@ void GradientDescent::FitModel() {
     residuals_lap->clear();  // free memory
     first_iter = false;
 
-    *old_gradients_laplass_ = *gradients_laplass_;
     gradients_laplass_ = DM::FivePointsLaplass(*gradients_, grid_);
     
     double tau = count_tau(*residuals);
@@ -66,8 +65,8 @@ double GradientDescent::count_tau(const DM& res) const {
 }
 
 double GradientDescent::count_alpha(const DM& res_lap) const {
-  double denominator = DM::ProductByPointAndSum(*old_gradients_laplass_, *old_gradients_, grid_);
-  return denominator > 0.0 ? DM::ProductByPointAndSum(res_lap, *old_gradients_, grid_) / denominator : 0.0;
+  double denominator = DM::ProductByPointAndSum(*old_gradients_laplass_, *gradients_, grid_);
+  return denominator > 0.0 ? DM::ProductByPointAndSum(res_lap, *gradients_, grid_) / denominator : 0.0;
 }
 
 std::shared_ptr<DM> GradientDescent::count_residuals() const {
@@ -85,14 +84,12 @@ std::shared_ptr<DM> GradientDescent::count_residuals() const {
 }
 
 void GradientDescent::count_new_gradients(const DM& res, const DM& res_lap, bool first_iter) {
-  old_gradients_.swap(gradients_);
-  
   if (first_iter) {
     *gradients_ = res;
     return;
   }
 
-  gradients_ = res - res_lap * count_alpha(res_lap);
+  gradients_ = res - *gradients_ * count_alpha(res_lap);
 }
 
 void GradientDescent::count_new_values(double tau) {

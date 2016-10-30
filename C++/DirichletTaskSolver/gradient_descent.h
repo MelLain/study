@@ -52,7 +52,6 @@ class GradientDescent {
   std::shared_ptr<DM> values_;
   std::shared_ptr<DM> old_values_;
   std::shared_ptr<DM> gradients_;
-  std::shared_ptr<DM> old_gradients_;
   std::shared_ptr<DM> gradients_laplass_;
   std::shared_ptr<DM> old_gradients_laplass_;
 

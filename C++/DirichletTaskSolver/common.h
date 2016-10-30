@@ -10,7 +10,7 @@ namespace DTS {
 
 const int ARG_PARSE_ERROR = -1;
 
-const double EPS = 1e-20;
+const double EPS = 1e-4;
 const double RAND_CONST = 0.05;
 
 const std::string OUT_VALUE_FILE = "OUT_VALUE_FILE.txt";
