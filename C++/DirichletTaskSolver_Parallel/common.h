@@ -15,7 +15,7 @@ enum ProcType {
   LOWER_PROC,
 };
 
-const double EPS = 1e-10;
+const double EPS = 1e-4;
 const double RAND_CONST = 0.05;
 
 const std::string OUT_VALUE_FILE = "OUT_VALUE_FILE.txt";

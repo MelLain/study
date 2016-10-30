@@ -27,7 +27,8 @@ void print_results(const std::vector<std::shared_ptr<DM> >& values, const Grid& 
     
     for (size_t r = start_shift; r < values[i]->num_rows() - end_shift; ++r) {
       for (size_t c = 0; c < values[i]->num_cols(); ++c) {
-        out_file << std::setw(15) << (*values[i])(r, c);
+        //out_file << std::setw(15) << (*values[i])(r, c);
+        out_file << (*values[i])(r, c) << ", ";
       }
       out_file << std::endl;
     }
@@ -37,7 +38,8 @@ void print_results(const std::vector<std::shared_ptr<DM> >& values, const Grid& 
   out_file.open(OUT_TRUE_FILE);
   for (size_t i = 0; i < grid.num_height_points(); ++i) {
     for (size_t j = 0; j < grid.num_width_points(); ++j) {
-      out_file << std::setw(15) << functions.true_func(grid(i, j));
+      //out_file << std::setw(15) << functions.true_func(grid(i, j));
+      out_file << functions.true_func(grid(i, j)) << ", ";
     }
     out_file << std::endl;
   }
@@ -70,11 +72,16 @@ int main(int argc, char* argv[]) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
-    Grid grid = Grid({ 0, 1, 0, 1 }, grid_size, grid_size, 1.5);
+    Grid grid = Grid({ 0, 2, 0, 2 }, grid_size, grid_size, 1.0);
+    /*
     Functions functions = { [](const Point& p){ return 8 - 12 * pow(p.width, 2) - 12 * pow(p.height, 2); },
                             [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); },
                             [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); } };
-
+    */
+    Functions functions = { [](const Point& p){ return (p.width * p.width +
+                                                        p.height * p.height) * sin(p.height * p.width); },
+                            [](const Point& p){ return 1.0 + sin(p.height * p.width); },
+                            [](const Point& p){ return 1.0 + sin(p.height * p.width); } };
     if (rank == 0) {
       size_t num_processed_iter = 0;
       double error = 1;
@@ -110,7 +117,7 @@ int main(int argc, char* argv[]) {
             all_values.push_back(receive_matrix(i, i));
           }
           print_results(all_values, grid, functions);
-          break;
+	  break;
         }
       }
 

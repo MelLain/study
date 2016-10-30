@@ -142,10 +142,11 @@ class Matrix {
       throw std::runtime_error("Matrix::ProductByPointAndSum: inconsistent sizes of matrices");
     }
 
-    size_t start_shift = (proc_type == UPPER_PROC || proc_type == GLOBAL_PROC) ? 0 : 1;
-    size_t end_shift = (proc_type == LOWER_PROC || proc_type == GLOBAL_PROC) ? 0 : 1;
+    size_t start_shift = (proc_type == UPPER_PROC || proc_type == GLOBAL_PROC) ? 1 : 2;
+    size_t end_shift = (proc_type == LOWER_PROC || proc_type == GLOBAL_PROC) ? 1 : 2;
+
     for (size_t i = start_shift; i < src_1.num_rows() - end_shift; ++i) {
-      for (size_t j = 0; j < src_1.num_cols(); ++j) {
+      for (size_t j = 1; j < src_1.num_cols() - 1; ++j) {
         size_t i_real = i + start_index + 1 < grid.num_width_points() - 1 ? i + start_index + 1 : i + start_index;
         size_t j_real = j + 1 < grid.num_height_points() - 1 ? j + 1 : j;
         retval += 0.25 * (grid.step_width(i + start_index) + grid.step_width(i_real)) * (grid.step_height(j) + grid.step_height(j_real)) * src_1(i, j) * src_2(i, j);

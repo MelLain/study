@@ -21,7 +21,6 @@ GradientDescent::GradientDescent(const Grid& grid, const Functions& functions,
 
   old_values_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
-  old_gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   old_gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
 }
@@ -38,14 +37,17 @@ void GradientDescent::FitModel() {
       break;
     }
 
+    exchange_mirror_rows(values_);
+    *old_gradients_laplass_ = *gradients_laplass_;
+
     // step 1: count residuals
     auto residuals = count_residuals();
     auto residuals_lap = DM::FivePointsLaplass(*residuals, grid_, start_index_);
     exchange_mirror_rows(residuals_lap);
 
     // step 2: count alpha
-    double alpha_den_part = DM::ProductByPointAndSum(*old_gradients_laplass_, *old_gradients_, grid_, proc_type_, start_index_);
-    double alpha_nom_part =  DM::ProductByPointAndSum(*residuals_lap, *old_gradients_, grid_, proc_type_, start_index_);
+    double alpha_den_part = DM::ProductByPointAndSum(*old_gradients_laplass_, *gradients_, grid_, proc_type_, start_index_);
+    double alpha_nom_part =  DM::ProductByPointAndSum(*residuals_lap, *gradients_, grid_, proc_type_, start_index_);
 
     send_value(alpha_den_part, 0, proc_rank_);
     double alpha_den;
@@ -58,16 +60,14 @@ void GradientDescent::FitModel() {
     double alpha = alpha_den > 0.0 ? alpha_nom / alpha_den : 0.0;
 
     // step 3: count new gradients
-    old_gradients_.swap(gradients_);
     if (first_iter) {
       *gradients_ = *residuals;
       first_iter = false;
     } else {
-      gradients_ = *residuals - *residuals_lap * alpha;
+      gradients_ = *residuals - *gradients_ * alpha;
     }
 
     // step 4: count new gradients laplass
-    *old_gradients_laplass_ = *gradients_laplass_;
     gradients_laplass_ = DM::FivePointsLaplass(*gradients_, grid_, start_index_);
     exchange_mirror_rows(gradients_laplass_);
     
@@ -90,7 +90,7 @@ void GradientDescent::FitModel() {
     // step 6: count new values
     count_new_values(tau);
 
-    // step 7: send difference to master and finish iter
+    // step 7: send difference to master and finish iter 
     send_value(values_difference(), 0, proc_rank_);
   }
 }
