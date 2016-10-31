@@ -72,16 +72,12 @@ int main(int argc, char* argv[]) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
-    Grid grid = Grid({ 0, 2, 0, 2 }, grid_size, grid_size, 1.0);
-    /*
+    Grid grid = Grid({ 0, 1, 0, 1 }, grid_size, grid_size, 1.0);
+
     Functions functions = { [](const Point& p){ return 8 - 12 * pow(p.width, 2) - 12 * pow(p.height, 2); },
                             [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); },
                             [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); } };
-    */
-    Functions functions = { [](const Point& p){ return (p.width * p.width +
-                                                        p.height * p.height) * sin(p.height * p.width); },
-                            [](const Point& p){ return 1.0 + sin(p.height * p.width); },
-                            [](const Point& p){ return 1.0 + sin(p.height * p.width); } };
+
     if (rank == 0) {
       size_t num_processed_iter = 0;
       double error = 1;
