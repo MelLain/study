@@ -53,11 +53,11 @@ int main(int argc, char* argv[]) {
       grid_size = std::stoi(argv[1]);
     }
 
-    Grid grid = Grid({ 0, 2, 0, 2 }, grid_size, grid_size);
-    Functions functions = { [](const Point& p){ return (p.width * p.width +
-                                                        p.height * p.height) * sin(p.height * p.width); },
-                            [](const Point& p){ return 1.0 + sin(p.height * p.width); },
-                            [](const Point& p){ return 1.0 + sin(p.height * p.width); } };
+    Grid grid = Grid({ 0, 1, 0, 1 }, grid_size, grid_size);
+
+    Functions functions = { [](const Point& p){ return 8 - 12 * pow(p.width, 2) - 12 * pow(p.height, 2); },
+                            [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); },
+                            [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); } };
 
     auto model = GradientDescent(grid, functions);
     model.FitModel();
