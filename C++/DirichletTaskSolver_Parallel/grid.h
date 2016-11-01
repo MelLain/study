@@ -1,53 +1,47 @@
 #pragma once
 
+#include <memory>
+
 #include "common.h"
+#include "matrix.h"
 
 namespace DTS {
 
 struct Point {
-  double width;
-  double height;
+  double r_value;
+  double c_value;
 
   friend std::ostream& operator<<(std::ostream& out, const Point& p) {
-    return out << "(" << p.width << ", " << p.height << ")";
+    return out << "(" << p.r_value << ", " << p.c_value << ")";
   }
 };
 
-struct Bounds {
-  double width_lower_bound;
-  double width_upper_bound;
-  double height_lower_bound;
-  double height_upper_bound;
+struct GridData {
+  double lower_bound;
+  double upper_bound;
+  size_t num_points;
+  double multiplier;
 };
 
 class Grid {
  public:
-  Grid(const Bounds& bounds, size_t num_width_points, size_t num_height_points, double multiplier);
+  Grid(size_t num_rows, size_t num_cols);
 
-  double height_lower_bound() const { return bounds_.height_lower_bound; };
-  double height_upper_bound() const { return bounds_.height_upper_bound; };
-  double width_lower_bound() const { return bounds_.width_lower_bound; };
-  double width_upper_bound() const { return bounds_.width_upper_bound; };
+  size_t num_rows() const { return data_.num_rows(); }
+  size_t num_cols() const { return data_.num_cols(); }
 
-  size_t num_width_points() const { return num_width_points_; }
-  size_t num_height_points() const { return num_height_points_; }
+  double r_step(size_t row) const;
+  double c_step(size_t col) const;
 
-  double step_height(size_t col) const;
-  double step_width(size_t row) const;
+  const Point& operator()(size_t row, size_t col) const;
+  Point& operator()(size_t row, size_t col);
 
-  Point operator()(size_t row, size_t col) const;
-
-  bool isBoundPoint(const Point& p) const;
+  bool is_bound_point(const Point& p, ProcType proc_type) const;
 
   void debug_print() const;
 
  private:
-  Bounds bounds_;
-  size_t num_width_points_;
-  size_t num_height_points_;
-  double multiplier_;
-  double step_width_0_;
-  double step_height_0_;
+  Matrix<Point> data_;
 };
 
 }  // namespace DTS

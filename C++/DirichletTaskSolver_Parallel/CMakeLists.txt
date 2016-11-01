@@ -12,7 +12,7 @@ find_package(MPI REQUIRED)
 
 include_directories(${MPI_INCLUDE_PATH})
 
-set(SOURCE_LIB grid.cc gradient_descent.cc mpi_helpers.cc)
+set(SOURCE_LIB grid.cc gradient_descent.cc mpi_helpers.cc matrix_operations.cc)
 
 set(CXX_COVERAGE_COMPILE_FLAGS "-fopenmp -m64")
 

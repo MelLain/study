@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "common.h"
-#include "grid.h"
 
 namespace DTS {
 
@@ -113,43 +112,6 @@ class Matrix {
         (*retval)(i, j) = data_[i][j] * val;
       }
     }
-    return retval;
-  }
-
-  static std::shared_ptr<Matrix<T> > FivePointsLaplass(const Matrix<T>& src, const Grid& grid, size_t start_index) {
-    auto retval = std::shared_ptr<Matrix<T> >(new Matrix<T>(src.num_rows(), src.num_cols(), 0.0));
-
-    for (size_t i = 1; i < retval->num_rows() - 1; ++i) {
-      for (size_t j = 1; j < retval->num_cols() - 1; ++j) {
-        double part_1 = (src(i, j) - src(i - 1, j)) / grid.step_width(i + start_index) -
-                        (src(i + 1, j) - src(i, j)) / grid.step_width(i + start_index + 1);
-        double part_2 = (src(i, j) - src(i, j - 1)) / grid.step_height(j) -
-                        (src(i, j + 1) - src(i, j)) / grid.step_height(j + 1);
-
-        (*retval)(i, j) = 2 * part_1 / (grid.step_width(i + start_index) + grid.step_width(i + start_index + 1)) +
-                          2 * part_2 / (grid.step_height(j) + grid.step_height(j + 1));
-      }
-    }
-
-    return retval;
-  }
-
-  static double ProductByPointAndSum(const Matrix<double>& src_1, const Matrix<double>& src_2,
-    const Grid& grid, ProcType proc_type = GLOBAL_PROC, size_t start_index = 0) {
-    double retval = 0.0;
-
-    if (src_1.num_cols() != src_2.num_cols() || src_1.num_rows() != src_2.num_rows()) {
-      throw std::runtime_error("Matrix::ProductByPointAndSum: inconsistent sizes of matrices");
-    }
-
-    for (size_t i = 1; i < src_1.num_rows() - 1; ++i) {
-      for (size_t j = 1; j < src_1.num_cols() - 1; ++j) {
-        size_t i_real = i + start_index + 1 < grid.num_width_points() - 1 ? i + start_index + 1 : i + start_index;
-        size_t j_real = j + 1 < grid.num_height_points() - 1 ? j + 1 : j;
-        retval += 0.25 * (grid.step_width(i + start_index) + grid.step_width(i_real)) * (grid.step_height(j) + grid.step_height(j_real)) * src_1(i, j) * src_2(i, j);
-      }
-    }
-
     return retval;
   }
 

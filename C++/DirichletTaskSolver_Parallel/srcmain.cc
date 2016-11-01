@@ -17,9 +17,11 @@
 
 using namespace DTS;
 
-void print_results(const std::vector<std::shared_ptr<DM> >& values, const Grid& grid, Functions functions) {
-  std::ofstream out_file;
-  out_file.open(OUT_VALUE_FILE);
+void print_results(const std::vector<std::shared_ptr<DM> >& values, const std::vector<std::shared_ptr<Grid> >& grids, Functions functions) {
+  std::ofstream out_value_file;
+  std::ofstream out_true_file;
+  out_value_file.open(OUT_VALUE_FILE);
+  out_true_file.open(OUT_TRUE_FILE);
 
   for (size_t i = 0; i < values.size(); ++i) {
     size_t start_shift = i > 0 ? 1 : 0;
@@ -27,27 +29,21 @@ void print_results(const std::vector<std::shared_ptr<DM> >& values, const Grid& 
     
     for (size_t r = start_shift; r < values[i]->num_rows() - end_shift; ++r) {
       for (size_t c = 0; c < values[i]->num_cols(); ++c) {
-        //out_file << std::setw(15) << (*values[i])(r, c);
-        out_file << (*values[i])(r, c) << ", ";
+        out_value_file << std::setw(15) << (*values[i])(r, c);
+        out_true_file << std::setw(15) << functions.true_func((*grids[i])(r, c));
+        //out_value_file << (*values[i])(r, c) << ", ";
+        //out_true_file << functions.true_func(grid(r, c)) << ", ";
       }
-      out_file << std::endl;
+      out_value_file << std::endl;
+      out_true_file << std::endl;
     }
   }
-  out_file.close();
-
-  out_file.open(OUT_TRUE_FILE);
-  for (size_t i = 0; i < grid.num_height_points(); ++i) {
-    for (size_t j = 0; j < grid.num_width_points(); ++j) {
-      //out_file << std::setw(15) << functions.true_func(grid(i, j));
-      out_file << functions.true_func(grid(i, j)) << ", ";
-    }
-    out_file << std::endl;
-  }
-  out_file.close();
+  out_value_file.close();
+  out_true_file.close();
 }
 
 int main(int argc, char* argv[]) {
-  const clock_t begin_time = clock();
+  double begin_time = MPI_Wtime();
   int rank = 0;
 
   MPI_Init(&argc, &argv);
@@ -61,22 +57,22 @@ int main(int argc, char* argv[]) {
       throw std::runtime_error("Invalid number of procs (< 2)");
     }
 
-    int grid_size = 0;
+    size_t grid_size = 0;
     if (argc != 2) {
       throw std::runtime_error("Incorrect usage! Use ./srcmain <grid_size>");
     } else {
       grid_size = std::stoi(argv[1]);
     }
 
-    if (num_processors > (grid_size + 2)) {
+    if (num_processors - 1 > static_cast<int>(grid_size * 0.5)) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
-    Grid grid = Grid({ 0, 1, 0, 1 }, grid_size, grid_size, 1.0);
+    GridData grid_data = { 0.0, 1.0, grid_size, 1.0 };
 
-    Functions functions = { [](const Point& p){ return 8 - 12 * pow(p.width, 2) - 12 * pow(p.height, 2); },
-                            [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); },
-                            [](const Point& p){ return pow((1 - pow(p.width, 2)), 2) + pow((1 - pow(p.height, 2)), 2); } };
+    Functions functions = { [](const Point& p){ return 8 - 12 * pow(p.r_value, 2) - 12 * pow(p.c_value, 2); },
+                            [](const Point& p){ return pow((1 - pow(p.r_value, 2)), 2) + pow((1 - pow(p.c_value, 2)), 2); },
+                            [](const Point& p){ return pow((1 - pow(p.r_value, 2)), 2) + pow((1 - pow(p.c_value, 2)), 2); } };
 
     if (rank == 0) {
       size_t num_processed_iter = 0;
@@ -108,16 +104,23 @@ int main(int argc, char* argv[]) {
 
           // receive results
           error = sqrt(collect_value_from_all(num_processors));
+
           std::vector<std::shared_ptr<DM> > all_values;
           for (int i = 1; i < num_processors; ++i) {
             all_values.push_back(receive_matrix(i, i));
           }
-          print_results(all_values, grid, functions);
+
+          std::vector<std::shared_ptr<Grid> > all_grids;
+          for (int i = 1; i < num_processors; ++i) {
+            all_grids.push_back(receive_grid(i, i));
+          }
+
+          print_results(all_values, all_grids, functions);
 	  break;
         }
       }
 
-      std::cout << rank  << ": Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl
+      std::cout << rank  << ": Finished! Elapsed time: " << MPI_Wtime() - begin_time << " sec." << std::endl
                 << "Final error: " << error << std::endl << "Num iters processed: " << num_processed_iter << std::endl;
     } else {
       ProcType proc_type = GLOBAL_PROC;
@@ -125,8 +128,8 @@ int main(int argc, char* argv[]) {
         proc_type = rank == 1 ? UPPER_PROC : (rank == num_processors - 1 ? LOWER_PROC : CENTER_PROC);
       }
 
-      size_t int_num_rows = (grid_size + 1) / (num_processors - 1);
-      size_t mod_num_rows = (grid_size + 1) % (num_processors - 1);
+      size_t int_num_rows = (grid_size) / (num_processors - 1);
+      size_t mod_num_rows = (grid_size) % (num_processors - 1);
       size_t num_rows_to_process = int_num_rows + (rank <= mod_num_rows ? 1 : 0);
 
       size_t start_idx = 0;
@@ -137,7 +140,7 @@ int main(int argc, char* argv[]) {
       }
 
       // each submatrix has both sides rows mirroring 
-      auto model = GradientDescent(grid, functions, proc_type, rank, start_idx, start_idx + num_rows_to_process);
+      auto model = GradientDescent(grid_data, functions, proc_type, rank, start_idx, start_idx + num_rows_to_process);
       model.FitModel();
     }
   } catch (const std::exception& e) {
