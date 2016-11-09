@@ -6,18 +6,21 @@
 
 namespace DTS {
 
-GradientDescent::GradientDescent(const GridData& grid_data, const Functions& functions,
-  ProcType proc_type, size_t proc_rank, size_t start_idx, size_t end_idx)
+GradientDescent::GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
+                                 size_t proc_rank, std::pair<bool, bool> first_send, std::pair<size_t, size_t> left_right_proc,
+                                 size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx)
   : functions_(functions)
-  , proc_type_(proc_type)
+  , proc_bounds_(proc_bounds)
   , proc_rank_(proc_rank)
+  , first_send_(first_send)
+  , left_right_proc_(left_right_proc)
 {
   clear();
-  init_grid(grid_data, start_idx, end_idx);
+  init_grid(grid_data, functions, start_row_idx, end_row_idx, start_col_idx, end_col_idx);
   init_values();
 
-  size_t h = grid_->num_cols();
   size_t w = grid_->num_rows();
+  size_t h = grid_->num_cols();
 
   old_values_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
@@ -45,6 +48,11 @@ void GradientDescent::FitModel() {
     auto residuals = count_residuals();
     auto residuals_lap = FivePointsLaplass(*residuals, *grid_);
     exchange_mirror_rows(residuals_lap);
+
+    //int k = 0; for (int i = 0; i < 1000000 * proc_rank_; ++i) ++k;
+    //std::cout << "\nRANK: " << proc_rank_ << " =================\n";
+    //values_->debug_print();
+    //std::cout << "\n=============================\n";
 
     // step 2: count alpha
     double alpha_den_part = ProductByPointAndSum(*old_gradients_laplass_, *gradients_, *grid_);
@@ -104,7 +112,7 @@ std::shared_ptr<DM> GradientDescent::count_residuals() {
 
   for (size_t i = 0; i < residuals->num_rows(); ++i) {
     for (size_t j = 0; j < residuals->num_cols(); ++j) {
-      (*residuals)(i, j) = grid_->is_bound_point({ static_cast<double>(i), static_cast<double>(j) }, proc_type_) ? 0.0 :
+      (*residuals)(i, j) = grid_->is_bound_point({ static_cast<double>(i), static_cast<double>(j) }, proc_bounds_) ? 0.0 :
         (*value_lap)(i, j) - functions_.main_func((*grid_)(i, j));
     }
   }
@@ -134,85 +142,147 @@ double GradientDescent::values_difference() const {
   return ProductByPointAndSum(*difference, *difference, *grid_);
 }
 
-void GradientDescent::init_grid(const GridData& grid_data, size_t start_index, size_t end_index) {
-  if (proc_type_ != GLOBAL_PROC) {
-    start_index -= proc_type_ == UPPER_PROC ? 0 : 1;
-    end_index += proc_type_ == LOWER_PROC ? 0 : 1;
-  }
-  grid_ = std::shared_ptr<Grid>(new Grid(end_index - start_index, grid_data.num_points));
+void GradientDescent::init_grid(const GridData& grid_data, const Functions& functions,
+                                size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx) {
+  start_row_idx -= !proc_bounds_.is_up ? 1 : 0;
+  end_row_idx += !proc_bounds_.is_low ? 1 : 0;
+  start_col_idx -= !proc_bounds_.is_left ? 1 : 0;
+  end_col_idx += !proc_bounds_.is_right ? 1 : 0;
 
-  double denominator = 0.0;
-  for (size_t i = 0; i < grid_data.num_points - 1; ++i) {
-    denominator += pow(grid_data.multiplier, i);
-  }
-  double step_0 = denominator > 0.0 ? fabs(grid_data.upper_bound - grid_data.lower_bound) / denominator : 0.0;
+  grid_ = std::shared_ptr<Grid>(new Grid(end_row_idx - start_row_idx, end_col_idx - start_col_idx));
 
-  double cur_r_value = grid_data.lower_bound;
-  for (size_t i = 0; i < grid_data.num_points; ++i) {
-    if (i >= start_index && i < end_index) {
-      double cur_c_value = grid_data.lower_bound;
-      for (size_t j = 0; j < grid_->num_cols(); ++j) {
-        (*grid_)(i - start_index, j) = { cur_r_value, cur_c_value };
-        cur_c_value += step_0 * pow(grid_data.multiplier, j);
+  for (size_t i = 0; i < grid_data.r_num_points; ++i) {
+    if (i >= start_row_idx && i < end_row_idx) {
+      for (size_t j = 0; j < grid_data.c_num_points; ++j) {
+        if (j >= start_col_idx && j < end_col_idx) {
+          double cur_r_value = grid_data.r_upper_bound * functions.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q) +
+            grid_data.r_lower_bound * (1 - functions.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q));
+          double cur_c_value = grid_data.c_upper_bound * functions.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q) +
+            grid_data.c_lower_bound * (1 - functions.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q));
+          (*grid_)(i - start_row_idx, j - start_col_idx) = { cur_r_value, cur_c_value };
+        }
       }
     }
-    cur_r_value += step_0 * pow(grid_data.multiplier, i);
   }
 }
 
 void GradientDescent::init_values() {
   values_ = std::shared_ptr<DM>(new DM(grid_->num_rows(), grid_->num_cols(), RAND_CONST));
 
-  if (proc_type_ != CENTER_PROC) {
+  if (proc_bounds_.is_up) {
     for (size_t i = 0; i < grid_->num_cols(); ++i) {
-      if (proc_type_ != LOWER_PROC) {
-        (*values_)(0, i) = functions_.bound_func((*grid_)(0, i));
-      }
-
-      if (proc_type_ != UPPER_PROC) {
-        (*values_)(grid_->num_rows() - 1, i) = functions_.bound_func((*grid_)(grid_->num_rows() - 1 , i));
-      }
+      (*values_)(0, i) = functions_.bound_func((*grid_)(0, i));
     }
   }
 
-  for (size_t i = 0; i < grid_->num_rows(); ++i) {
-    (*values_)(i, 0) = functions_.bound_func((*grid_)(i, 0));
-    (*values_)(i, grid_->num_cols() - 1) = functions_.bound_func((*grid_)(i, grid_->num_cols() - 1));
+  if (proc_bounds_.is_low) {
+    for(size_t i = 0; i < grid_->num_cols(); ++i) {
+      (*values_)(grid_->num_rows() - 1, i) = functions_.bound_func((*grid_)(grid_->num_rows() - 1, i));
+    }
+  }
+
+  if (proc_bounds_.is_left) {
+    for(size_t i = 0; i < grid_->num_rows(); ++i) {
+      (*values_)(i, 0) = functions_.bound_func((*grid_)(i, 0));
+    }
+  }
+
+  if (proc_bounds_.is_right) {
+    for(size_t i = 0; i < grid_->num_rows(); ++i) {
+      (*values_)(i, grid_->num_cols() - 1) = functions_.bound_func((*grid_)(i, grid_->num_cols() - 1));
+    }
   }
 }
 
 void GradientDescent::exchange_mirror_rows(std::shared_ptr<DM> values) {
-  // proc_rank_ mod 2 == 1 -> first send, then receive
-  //                  == 0 -> first receive, then send
-  if (proc_type_ == GLOBAL_PROC) {
+  if (proc_bounds_.is_up && proc_bounds_.is_low && proc_bounds_.is_left && proc_bounds_.is_right) {
     return;
   }
 
-  if (proc_rank_ % 2 == 1) {
-    if (proc_type_ != LOWER_PROC) {
+  // exchange rows
+  if (first_send_.first) {
+    if (!proc_bounds_.is_low) {
       send_vector(values->get_row(values->num_rows() - 2), proc_rank_ + 1, proc_rank_);
     }
-    if (proc_type_ != UPPER_PROC) {
+    if (!proc_bounds_.is_up) { 
       send_vector(values->get_row(1), proc_rank_ - 1, proc_rank_);
     }
-    if (proc_type_ != LOWER_PROC) {
+ 
+    if (!proc_bounds_.is_low) {
       receive_vector(&values->get_row_non_const(values->num_rows() - 1), proc_rank_ + 1, proc_rank_ + 1);
     }
-    if (proc_type_ != UPPER_PROC) {
+    if (!proc_bounds_.is_up) {
       receive_vector(&values->get_row_non_const(0), proc_rank_ - 1, proc_rank_ - 1);
     }
   } else {
-    if (proc_type_ != LOWER_PROC) {
+    if (!proc_bounds_.is_low) { 
       receive_vector(&values->get_row_non_const(values->num_rows() - 1), proc_rank_ + 1, proc_rank_ + 1);
     }
-    if (proc_type_ != UPPER_PROC) {
+    if (!proc_bounds_.is_up) {
       receive_vector(&values->get_row_non_const(0), proc_rank_ - 1, proc_rank_ - 1);
     }
-    if (proc_type_ != LOWER_PROC) {
+
+    if (!proc_bounds_.is_low) {
       send_vector(values->get_row(values->num_rows() - 2), proc_rank_ + 1, proc_rank_);
     }
-    if (proc_type_ != UPPER_PROC) {
+    if (!proc_bounds_.is_up) {
       send_vector(values->get_row(1), proc_rank_ - 1, proc_rank_);
+    }
+  }
+
+  // exchange cols (maybe need to remove copy-paste)
+  std::vector<double> data(values->num_rows(), 0.0);
+  if (first_send_.second){
+    if (!proc_bounds_.is_left) {
+      for (size_t i = 0; i < data.size(); ++i) {
+        data[i] = (*values)(i, 1);
+      }
+      send_vector(data, left_right_proc_.first, proc_rank_);
+    }
+    if (!proc_bounds_.is_right) {
+      for (size_t i = 0; i < data.size(); ++i) {
+	data[i]= (*values)(i, values->num_cols() - 2);
+      }
+      send_vector(data, left_right_proc_.second, proc_rank_);
+    }
+
+    if (!proc_bounds_.is_left) {
+      receive_vector(&data, left_right_proc_.first, left_right_proc_.first);
+      for (size_t i = 0; i < data.size(); ++i) {
+        (*values)(i, 0) = data[i];
+      }
+    }
+    if (!proc_bounds_.is_right) {
+      receive_vector(&data, left_right_proc_.second, left_right_proc_.second);
+      for (size_t i = 0; i < data.size(); ++i) {
+	(*values)(i, values->num_cols() - 1) = data[i];
+      }
+    }
+  } else {
+    if (!proc_bounds_.is_left) {
+      receive_vector(&data, left_right_proc_.first, left_right_proc_.first);
+      for (size_t i = 0; i < data.size(); ++i) {
+	(*values)(i, 0) = data[i];
+      } 
+    }
+    if (!proc_bounds_.is_right) {
+      receive_vector(&data, left_right_proc_.second, left_right_proc_.second);
+      for (size_t i = 0; i < data.size(); ++i) {
+        (*values)(i, values->num_cols() - 1) = data[i];
+      }
+    }
+
+    if (!proc_bounds_.is_left) {
+      for (size_t i = 0; i < data.size(); ++i) {
+        data[i] = (*values)(i, 1);
+      }
+      send_vector(data, left_right_proc_.first, proc_rank_);
+    }
+    if (!proc_bounds_.is_right) {
+      for (size_t i = 0; i < data.size(); ++i) {
+        data[i]= (*values)(i, values->num_cols() - 2);
+      }
+      send_vector(data, left_right_proc_.second, proc_rank_);
     }
   }
 }

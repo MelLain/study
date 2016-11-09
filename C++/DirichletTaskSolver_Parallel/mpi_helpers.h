@@ -29,4 +29,5 @@ void receive_flag(FlagType* flag, int sender_rank, int tag);
 double collect_value_from_all(int num_procs);
 void send_value_to_all(int num_procs, double value);
 void send_flag_to_all(int num_procs, FlagType flag);
+
 }  // namespace DTS

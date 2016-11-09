@@ -44,7 +44,7 @@ class Matrix {
   void debug_print() const {
     for (size_t i = 0; i < num_rows(); ++i) {
       for (size_t j = 0; j < num_cols(); ++j) {
-        std::cout << data_[i][j] << " ";
+        std::cout << std::setw(12) << data_[i][j] << " ";
       }
       std::cout << std::endl;
     }

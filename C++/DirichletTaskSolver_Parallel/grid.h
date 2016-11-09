@@ -17,10 +17,15 @@ struct Point {
 };
 
 struct GridData {
-  double lower_bound;
-  double upper_bound;
-  size_t num_points;
-  double multiplier;
+  double r_lower_bound;
+  double r_upper_bound;
+  size_t r_num_points;
+
+  double c_lower_bound;
+  double c_upper_bound;
+  size_t c_num_points;
+
+  double q;
 };
 
 class Grid {
@@ -36,7 +41,7 @@ class Grid {
   const Point& operator()(size_t row, size_t col) const;
   Point& operator()(size_t row, size_t col);
 
-  bool is_bound_point(const Point& p, ProcType proc_type) const;
+  bool is_bound_point(const Point& p, const ProcBounds& proc_bounds) const;
 
   void debug_print() const;
 

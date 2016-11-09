@@ -4,15 +4,16 @@
 
 #include <exception>
 #include <iostream>
+#include <iomanip>
 #include <string>
 
 namespace DTS {
 
-enum ProcType {
-  GLOBAL_PROC,
-  UPPER_PROC,
-  CENTER_PROC,
-  LOWER_PROC,
+struct ProcBounds {
+  bool is_up;
+  bool is_low;
+  bool is_left;
+  bool is_right;
 };
 
 const double EPS = 1e-4;

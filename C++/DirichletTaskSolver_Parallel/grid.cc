@@ -21,15 +21,14 @@ Point& Grid::operator()(size_t row, size_t col) {
   return data_(row, col);
 }
 
-bool Grid::is_bound_point(const Point& p, ProcType proc_type) const {
-  // This method is correct if number of rows per processor is >= 2
+bool Grid::is_bound_point(const Point& p, const ProcBounds& proc_bounds) const {
+  // This method is correct if number of rows and cols per processor is >= 2
+  bool left_bound = (p.c_value == 0 && proc_bounds.is_left);
+  bool right_bound = (p.c_value == data_.num_cols() - 1 && proc_bounds.is_right);
+  bool up_bound = (p.r_value == 0 && proc_bounds.is_up);
+  bool low_bound = (p.r_value == data_.num_rows() - 1 && proc_bounds.is_low);
 
-  bool up = (proc_type == GLOBAL_PROC || proc_type == UPPER_PROC);
-  bool lw = (proc_type == GLOBAL_PROC || proc_type == LOWER_PROC);
-
-  bool row_bound = (p.r_value == 0 && up) || (p.r_value == data_.num_rows() - 1 && lw);
-  bool col_bound = p.c_value == 0 || p.c_value == data_.num_cols() - 1;
-  return row_bound || col_bound;
+  return left_bound || right_bound || up_bound || low_bound;
 }
 
 void Grid::debug_print() const {

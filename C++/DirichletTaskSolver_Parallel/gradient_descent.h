@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <utility>
 
 #include "common.h"
 #include "matrix.h"
@@ -10,17 +11,20 @@
 namespace DTS {
 
 typedef double(*Func)(const Point& point);
+typedef double(*StepFunc)(double value, double q);
 
 struct Functions {
   Func main_func;
   Func bound_func;
   Func true_func;
+  StepFunc step_func;
 };
 
 class GradientDescent {
  public:
-  GradientDescent(const GridData& grid_data, const Functions& functions,
-    ProcType proc_type, size_t proc_rank, size_t start_idx, size_t end_idx);
+  GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
+                  size_t proc_rank, std::pair<bool, bool> first_send, std::pair<size_t, size_t> left_right_proc,
+                  size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx);
 
   void FitModel();
   const DM& GetCurrentMatrix() const { return *values_; }
@@ -41,13 +45,17 @@ class GradientDescent {
   double count_pre_error() const;
   double values_difference() const;
 
-  void init_grid(const GridData& grid_data, size_t start_index, size_t end_index);
+  void init_grid(const GridData& grid_data, const Functions& functions,
+                 size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx);
   void init_values();
   void exchange_mirror_rows(std::shared_ptr<DM> values);
 
   Functions functions_;
-  ProcType proc_type_;
+  ProcBounds proc_bounds_;
   size_t proc_rank_;
+
+  std::pair<bool, bool> first_send_;
+  std::pair<size_t, size_t> left_right_proc_;
 
   std::shared_ptr<Grid> grid_;
 
