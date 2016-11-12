@@ -23,7 +23,7 @@ struct Functions {
 class GradientDescent {
  public:
   GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
-                  size_t proc_rank, std::pair<bool, bool> first_send, std::pair<size_t, size_t> left_right_proc,
+                  size_t proc_rank, size_t num_row_procs, size_t num_points,
                   size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx);
 
   void FitModel();
@@ -50,9 +50,12 @@ class GradientDescent {
   void init_values();
   void exchange_mirror_rows(std::shared_ptr<DM> values);
 
+  void save_results_file();
+
   Functions functions_;
   ProcBounds proc_bounds_;
   size_t proc_rank_;
+  size_t num_points_;
 
   std::pair<bool, bool> first_send_;
   std::pair<size_t, size_t> left_right_proc_;

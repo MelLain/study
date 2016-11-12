@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <exception>
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -18,9 +19,6 @@ struct ProcBounds {
 
 const double EPS = 1e-4;
 const double RAND_CONST = 0.05;
-
-const std::string OUT_VALUE_FILE = "OUT_VALUE_FILE.txt";
-const std::string OUT_TRUE_FILE = "OUT_TRUE_FILE.txt";
 
 enum FlagType {
   START_ITER,

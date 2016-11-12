@@ -1,11 +1,9 @@
 #include <cmath>
 #include <ctime>
 
-#include <fstream>
 #include <memory>
 #include <vector>
 #include <string>
-#include <utility>
 
 #include "mpi.h"
 
@@ -39,8 +37,8 @@ namespace {
   int num_row_processors(int num_row_points, int num_col_points, int num_processors) {
     float row_var = static_cast<float>(num_row_points);
     float col_var = static_cast<float>(num_col_points);
-    int num_r = 0;
-    int num_c = 0;
+    size_t num_r = 0;
+    size_t num_c = 0;
     
     for (size_t i = 0; i < num_processors; ++i) {
       if (row_var >= col_var) {
@@ -57,34 +55,17 @@ namespace {
     return num_r;
   }
 
-} // namespace
-
-void print_results(const std::vector<std::shared_ptr<DM> >& values, const std::vector<std::shared_ptr<Grid> >& grids, Functions functions) {
-  /*
-  std::ofstream out_value_file;
-  std::ofstream out_true_file;
-  out_value_file.open(OUT_VALUE_FILE);
-  out_true_file.open(OUT_TRUE_FILE);
-
-  for (size_t i = 0; i < values.size(); ++i) {
-    size_t start_shift = i > 0 ? 1 : 0;
-    size_t end_shift = i < values.size() - 1 ? 1 : 0;
-    
-    for (size_t r = start_shift; r < values[i]->num_rows() - end_shift; ++r) {
-      for (size_t c = 0; c < values[i]->num_cols(); ++c) {
-        out_value_file << std::setw(15) << (*values[i])(r, c);
-        out_true_file << std::setw(15) << functions.true_func((*grids[i])(r, c));
-        //out_value_file << (*values[i])(r, c) << ", ";
-        //out_true_file << functions.true_func(grid(r, c)) << ", ";
-      }
-      out_value_file << std::endl;
-      out_true_file << std::endl;
-    }
-  }
-  out_value_file.close();
-  out_true_file.close();
-  */
+  void save_info_file(size_t num_procs, double error, size_t num_processed_iter, size_t num_row_procs, size_t num_points) {
+  std::ofstream out_info_file;
+  out_info_file.open("INFO_MODEL_" + std::to_string(num_points) + "_POINTS_" +  std::to_string(num_procs) + "_PROCS");
+  out_info_file << "Num slave processors:\n" << num_procs << std::endl;
+  out_info_file << "Final error:\n" << error << std::endl;
+  out_info_file << "Num processed iters:\n" << num_processed_iter << std::endl;
+  out_info_file << "Num row processors:\n" << num_row_procs << std::endl;
+  out_info_file.close();
 }
+
+} // namespace
 
 int main(int argc, char* argv[]) {
   double begin_time = MPI_Wtime();
@@ -98,6 +79,7 @@ int main(int argc, char* argv[]) {
 
   try {
     int power_of_two = is_power_of_two(num_processors - 1);
+
     if (num_processors < 2 || power_of_two == -1) {
       throw std::runtime_error("Invalid number of procs (< 2 or not 2^q + 1)");
     }
@@ -113,9 +95,13 @@ int main(int argc, char* argv[]) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
+    size_t num_row_procs = num_row_processors(grid_size, grid_size,
+      static_cast<int>((num_processors - 1) * ((power_of_two % 2 == 0) ? 1 : 0.5)));
+    num_row_procs *= power_of_two % 2 == 0 ? 1 : 2;
+
     size_t r_grid_size = grid_size;
     size_t c_grid_size = grid_size;
-    GridData grid_data = { 0.0, 1.0, r_grid_size, 0.0, 1.0, c_grid_size, 1.0 };
+    GridData grid_data = { 0.0, 1.0, r_grid_size, 0.0, 1.0, c_grid_size, 1.5 };
 
     Functions functions = { [](const Point& p) { return 8 - 12 * pow(p.r_value, 2) - 12 * pow(p.c_value, 2); },
                             [](const Point& p) { return pow((1 - pow(p.r_value, 2)), 2) + pow((1 - pow(p.c_value, 2)), 2); },
@@ -150,20 +136,9 @@ int main(int argc, char* argv[]) {
         if (difference < EPS) {
 	  send_flag_to_all(num_processors, TERMINATE);
 
-          // receive results
+          // receive errors and save info about parts of result
           error = sqrt(collect_value_from_all(num_processors));
-
-          std::vector<std::shared_ptr<DM> > all_values;
-          for (int i = 1; i < num_processors; ++i) {
-            all_values.push_back(receive_matrix(i, i));
-          }
-
-          std::vector<std::shared_ptr<Grid> > all_grids;
-          for (int i = 1; i < num_processors; ++i) {
-            all_grids.push_back(receive_grid(i, i));
-          }
-
-          print_results(all_values, all_grids, functions);
+          save_info_file(num_processors - 1, error, num_processed_iter, num_row_procs, grid_size);
 	  break;
         }
       }
@@ -171,8 +146,6 @@ int main(int argc, char* argv[]) {
       std::cout << rank  << ": Finished! Elapsed time: " << MPI_Wtime() - begin_time << " sec." << std::endl
                 << "Final error: " << error << std::endl << "Num iters processed: " << num_processed_iter << std::endl;
     } else {
-      size_t num_row_procs = num_row_processors(grid_size, grid_size, static_cast<int>((num_processors - 1) * ((power_of_two % 2 == 0) ? 1 : 0.5)));
-      num_row_procs *= power_of_two % 2 == 0 ? 1 : 2;
       size_t sub_rank = (rank - 1) % num_row_procs + 1;
       size_t int_num_rows = r_grid_size / num_row_procs;
       size_t mod_num_rows = r_grid_size % num_row_procs;
@@ -216,22 +189,13 @@ int main(int argc, char* argv[]) {
         proc_bounds = { true, true, true, true };
       }
 
-      //std::cout << "R: " << rank << " * " << r_start_idx << " - " << r_start_idx + num_rows_to_process << " | " << c_start_idx << " - " << c_start_idx + num_cols_to_process << std::endl;
-
-      // determines the order of sending-receiving mirror (rows, cols)
-      auto first_send = std::make_pair((rank % num_row_procs) % 2 == 1, (rank / num_row_procs) % 2 == 0);
-
-      // determines left and right neighbours of the current processor
-      auto left_right_procs = std::make_pair(proc_bounds.is_left ? 0 : rank - num_row_procs,
-                                             proc_bounds.is_right ? 0 : rank + num_row_procs);
-
       // each submatrix has both sides rows and cols mirroring
       auto model = GradientDescent(grid_data,
                                    functions,
                                    proc_bounds,
                                    rank,
-                                   first_send,
-                                   left_right_procs,
+                                   num_row_procs,
+                                   grid_size,
                                    r_start_idx,
                                    r_start_idx + num_rows_to_process,
                                    c_start_idx,

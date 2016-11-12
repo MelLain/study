@@ -1,4 +1,6 @@
 #include <cmath>
+#include <string>
+#include <utility>
 
 #include "matrix_operations.h"
 #include "mpi_helpers.h"
@@ -7,13 +9,14 @@
 namespace DTS {
 
 GradientDescent::GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
-                                 size_t proc_rank, std::pair<bool, bool> first_send, std::pair<size_t, size_t> left_right_proc,
+                                 size_t proc_rank, size_t num_row_procs, size_t num_points,
                                  size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx)
   : functions_(functions)
   , proc_bounds_(proc_bounds)
   , proc_rank_(proc_rank)
-  , first_send_(first_send)
-  , left_right_proc_(left_right_proc)
+  , first_send_(std::make_pair((proc_rank % num_row_procs) % 2 == 1, (proc_rank / num_row_procs) % 2 == 0))
+  , left_right_proc_(std::make_pair(proc_bounds.is_left ? 0 : proc_rank - num_row_procs, proc_bounds.is_right ? 0 : proc_rank + num_row_procs))
+  , num_points_(num_points)
 {
   clear();
   init_grid(grid_data, functions, start_row_idx, end_row_idx, start_col_idx, end_col_idx);
@@ -36,8 +39,7 @@ void GradientDescent::FitModel() {
 
     if (flag == TERMINATE) {
       send_value(count_pre_error(), 0, proc_rank_);
-      send_matrix(*values_, 0, proc_rank_);
-      send_grid(*grid_, 0, proc_rank_);
+      save_results_file();
       break;
     }
 
@@ -48,11 +50,6 @@ void GradientDescent::FitModel() {
     auto residuals = count_residuals();
     auto residuals_lap = FivePointsLaplass(*residuals, *grid_);
     exchange_mirror_rows(residuals_lap);
-
-    //int k = 0; for (int i = 0; i < 1000000 * proc_rank_; ++i) ++k;
-    //std::cout << "\nRANK: " << proc_rank_ << " =================\n";
-    //values_->debug_print();
-    //std::cout << "\n=============================\n";
 
     // step 2: count alpha
     double alpha_den_part = ProductByPointAndSum(*old_gradients_laplass_, *gradients_, *grid_);
@@ -79,11 +76,11 @@ void GradientDescent::FitModel() {
     // step 4: count new gradients laplass
     gradients_laplass_ = FivePointsLaplass(*gradients_, *grid_);
     exchange_mirror_rows(gradients_laplass_);
-    
+
     // step 5: count tau
     double tau_den_part = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
     double tau_nom_part = ProductByPointAndSum(*residuals, *gradients_, *grid_);
-
+    //std::cout << proc_rank_ << " - " << tau_den_part << " - "  << tau_nom_part << std::endl;
     send_value(tau_den_part, 0, proc_rank_);
     double tau_den;
     receive_value(&tau_den, 0, proc_rank_);
@@ -285,6 +282,31 @@ void GradientDescent::exchange_mirror_rows(std::shared_ptr<DM> values) {
       send_vector(data, left_right_proc_.second, proc_rank_);
     }
   }
+}
+
+void GradientDescent::save_results_file() {
+  std::ofstream out_value_file;
+  std::ofstream out_true_file;
+
+  size_t start_row_shift = proc_bounds_.is_up ? 0 : 1;
+  size_t end_row_shift = proc_bounds_.is_low ? 0 : 1;
+  size_t start_col_shift = proc_bounds_.is_left ? 0 : 1;
+  size_t end_col_shift = proc_bounds_.is_right ? 0 : 1;
+
+  out_value_file.open("VALUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" + std::to_string(proc_rank_));
+  out_true_file.open("TRUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" + std::to_string(proc_rank_));
+
+  for (size_t i = start_row_shift; i < values_->num_rows() - end_row_shift; ++i) {
+    for (size_t j = start_col_shift; j < values_->num_cols() - end_col_shift; ++j) {
+      out_value_file << (*values_)(i, j) << ", ";
+      out_true_file << functions_.true_func((*grid_)(i, j)) << ", ";                                                                                       
+    }
+    out_value_file << std::endl;
+    out_true_file << std::endl;
+  }
+
+  out_value_file.close();
+  out_true_file.close();
 }
 
 }  // namespace DTS
