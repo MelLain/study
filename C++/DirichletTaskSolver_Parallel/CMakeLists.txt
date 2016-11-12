@@ -16,8 +16,6 @@ set(SOURCE_LIB grid.cc gradient_descent.cc mpi_helpers.cc matrix_operations.cc)
 
 set(CXX_COVERAGE_COMPILE_FLAGS "-fopenmp -m64")
 
-set(SOURCE_EXE srcmain.cc)
-
 if(MPI_COMPILE_FLAGS)
   set_target_properties(srcmain PROPERTIES
     COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
@@ -29,6 +27,8 @@ if(MPI_LINK_FLAGS)
 endif()
 
 add_library(help_lib STATIC ${SOURCE_LIB} ${MPI_LIBRARIES})
+
+set(SOURCE_EXE srcmain.cc)
 
 add_executable(srcmain ${SOURCE_EXE})
 

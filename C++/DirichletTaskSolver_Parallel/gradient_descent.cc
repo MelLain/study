@@ -80,7 +80,7 @@ void GradientDescent::FitModel() {
     // step 5: count tau
     double tau_den_part = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
     double tau_nom_part = ProductByPointAndSum(*residuals, *gradients_, *grid_);
-    //std::cout << proc_rank_ << " - " << tau_den_part << " - "  << tau_nom_part << std::endl;
+
     send_value(tau_den_part, 0, proc_rank_);
     double tau_den;
     receive_value(&tau_den, 0, proc_rank_);
@@ -92,6 +92,7 @@ void GradientDescent::FitModel() {
     double tau = tau_den > 0.0 ? tau_nom / tau_den : 0.0;
 
     residuals->clear();  // free memory
+    residuals_lap->clear();
 
     // step 6: count new values
     count_new_values(tau);

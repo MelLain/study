@@ -55,13 +55,15 @@ namespace {
     return num_r;
   }
 
-  void save_info_file(size_t num_procs, double error, size_t num_processed_iter, size_t num_row_procs, size_t num_points) {
+  void save_info_file(size_t num_procs, double error, size_t num_processed_iter, size_t num_row_procs, size_t num_points, double e_time) {
   std::ofstream out_info_file;
   out_info_file.open("INFO_MODEL_" + std::to_string(num_points) + "_POINTS_" +  std::to_string(num_procs) + "_PROCS");
   out_info_file << "Num slave processors:\n" << num_procs << std::endl;
   out_info_file << "Final error:\n" << error << std::endl;
   out_info_file << "Num processed iters:\n" << num_processed_iter << std::endl;
+  out_info_file << "Elapsed time:\n" << e_time << std::endl;
   out_info_file << "Num row processors:\n" << num_row_procs << std::endl;
+  out_info_file << "Num points:\n" << num_points << std::endl;
   out_info_file.close();
 }
 
@@ -138,7 +140,7 @@ int main(int argc, char* argv[]) {
 
           // receive errors and save info about parts of result
           error = sqrt(collect_value_from_all(num_processors));
-          save_info_file(num_processors - 1, error, num_processed_iter, num_row_procs, grid_size);
+          save_info_file(num_processors - 1, error, num_processed_iter, num_row_procs, grid_size, MPI_Wtime() - begin_time);
 	  break;
         }
       }

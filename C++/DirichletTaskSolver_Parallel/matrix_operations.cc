@@ -26,10 +26,7 @@ double ProductByPointAndSum(const DM& src_1, const DM& src_2, const Grid& grid) 
 
   for (size_t i = 1; i < src_1.num_rows() - 1; ++i) {
     for (size_t j = 1; j < src_1.num_cols() - 1; ++j) {
-      size_t i_real = i + 1 < grid.num_rows() - 1 ? i + 1 : i;
-      size_t j_real = j + 1 < grid.num_cols() - 1 ? j + 1 : j;
-
-      retval += 0.25 * (grid.r_step(i) + grid.r_step(i_real)) * (grid.c_step(j) + grid.c_step(j_real)) * src_1(i, j) * src_2(i, j);
+      retval += 0.25 * (grid.r_step(i) + grid.r_step(i + 1)) * (grid.c_step(j) + grid.c_step(j + 1)) * src_1(i, j) * src_2(i, j);
     }
   }
 
