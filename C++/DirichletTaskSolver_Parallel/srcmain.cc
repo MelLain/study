@@ -1,5 +1,4 @@
 #include <cmath>
-#include <ctime>
 
 #include <memory>
 #include <vector>
@@ -8,7 +7,6 @@
 #include "mpi.h"
 
 #include "common.h"
-#include "matrix.h"
 #include "grid.h"
 #include "gradient_descent.h"
 #include "mpi_helpers.h"
@@ -70,11 +68,12 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
-  double begin_time = MPI_Wtime();
-  int rank = 0;
-
   MPI_Init(&argc, &argv);
+
+  int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  double begin_time = MPI_Wtime();
 
   int num_processors = 0;
   MPI_Comm_size(MPI_COMM_WORLD, &num_processors);

@@ -19,7 +19,7 @@ GradientDescent::GradientDescent(const GridData& grid_data, const Functions& fun
   , num_points_(num_points)
 {
   clear();
-  init_grid(grid_data, functions, start_row_idx, end_row_idx, start_col_idx, end_col_idx);
+  init_grid(grid_data, start_row_idx, end_row_idx, start_col_idx, end_col_idx);
   init_values();
 
   size_t w = grid_->num_rows();
@@ -28,7 +28,6 @@ GradientDescent::GradientDescent(const GridData& grid_data, const Functions& fun
   old_values_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
   gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
-  old_gradients_laplass_ = std::shared_ptr<DM>(new DM(w, h, 0.0));
 }
 
 void GradientDescent::FitModel() {
@@ -44,7 +43,6 @@ void GradientDescent::FitModel() {
     }
 
     exchange_mirror_rows(values_);
-    *old_gradients_laplass_ = *gradients_laplass_;
 
     // step 1: count residuals
     auto residuals = count_residuals();
@@ -52,7 +50,7 @@ void GradientDescent::FitModel() {
     exchange_mirror_rows(residuals_lap);
 
     // step 2: count alpha
-    double alpha_den_part = ProductByPointAndSum(*old_gradients_laplass_, *gradients_, *grid_);
+    double alpha_den_part = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
     double alpha_nom_part =  ProductByPointAndSum(*residuals_lap, *gradients_, *grid_);
 
     send_value(alpha_den_part, 0, proc_rank_);
@@ -140,8 +138,8 @@ double GradientDescent::values_difference() const {
   return ProductByPointAndSum(*difference, *difference, *grid_);
 }
 
-void GradientDescent::init_grid(const GridData& grid_data, const Functions& functions,
-                                size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx) {
+void GradientDescent::init_grid(const GridData& grid_data, size_t start_row_idx, size_t end_row_idx,
+                                size_t start_col_idx, size_t end_col_idx) {
   start_row_idx -= !proc_bounds_.is_up ? 1 : 0;
   end_row_idx += !proc_bounds_.is_low ? 1 : 0;
   start_col_idx -= !proc_bounds_.is_left ? 1 : 0;
@@ -153,10 +151,10 @@ void GradientDescent::init_grid(const GridData& grid_data, const Functions& func
     if (i >= start_row_idx && i < end_row_idx) {
       for (size_t j = 0; j < grid_data.c_num_points; ++j) {
         if (j >= start_col_idx && j < end_col_idx) {
-          double cur_r_value = grid_data.r_upper_bound * functions.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q) +
-            grid_data.r_lower_bound * (1 - functions.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q));
-          double cur_c_value = grid_data.c_upper_bound * functions.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q) +
-            grid_data.c_lower_bound * (1 - functions.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q));
+          double cur_r_value = grid_data.r_upper_bound * functions_.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q) +
+            grid_data.r_lower_bound * (1 - functions_.step_func(static_cast<double>(i) / (grid_data.r_num_points - 1), grid_data.q));
+          double cur_c_value = grid_data.c_upper_bound * functions_.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q) +
+            grid_data.c_lower_bound * (1 - functions_.step_func(static_cast<double>(j) / (grid_data.c_num_points - 1), grid_data.q));
           (*grid_)(i - start_row_idx, j - start_col_idx) = { cur_r_value, cur_c_value };
         }
       }

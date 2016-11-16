@@ -58,7 +58,7 @@ class Matrix {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
       throw std::runtime_error("Matrix::operator+: inconsistent sizes of matrices");
     }
-    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
+    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), T()));
 
     for (size_t i = 0; i < num_rows(); ++i) {
       for (size_t j = 0; j < num_cols(); ++j) {
@@ -76,7 +76,7 @@ class Matrix {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
       throw std::runtime_error("Matrix::operator-: inconsistent sizes of matrices");
     }
-    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
+    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), T()));
 
     for (size_t i = 0; i < num_rows(); ++i) {
       for (size_t j = 0; j < num_cols(); ++j) {
@@ -94,7 +94,7 @@ class Matrix {
     if (num_cols() != rhs.num_cols() || num_rows() != rhs.num_rows()) {
       throw std::runtime_error("Matrix::operator*: inconsistent sizes of matrices");
     }
-    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
+    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), T()));
 
     for (size_t i = 0; i < num_rows(); ++i) {
       for (size_t j = 0; j < num_cols(); ++j) {
@@ -105,7 +105,7 @@ class Matrix {
   }
 
   std::shared_ptr<Matrix<T> > operator*(const T& val) const {
-    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), 0.0));
+    auto retval = std::shared_ptr<Matrix<T> >(new Matrix(num_rows(), num_cols(), T()));
 
     for (size_t i = 0; i < num_rows(); ++i) {
       for (size_t j = 0; j < num_cols(); ++j) {

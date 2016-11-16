@@ -11,12 +11,6 @@
 
 namespace DTS {
 
-void send_matrix(const DM& values, int receiver_rank, int tag);
-std::shared_ptr<DM> receive_matrix(int sender_rank, int tag);
-
-void send_grid(const Grid& values, int receiver_rank, int tag);
-std::shared_ptr<Grid> receive_grid(int sender_rank, int tag);
-
 void send_vector(const std::vector<double>& values, int receiver_rank, int tag);
 void receive_vector(std::vector<double>* values, int sender_rank, int tag);
 

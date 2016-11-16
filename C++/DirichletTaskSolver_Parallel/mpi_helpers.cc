@@ -2,63 +2,6 @@
 
 namespace DTS {
 
-void send_matrix(const DM& values, int receiver_rank, int tag) {
-  int num_rows = values.num_rows();
-  int num_cols = values.num_cols();
-  MPI_Send(&num_rows, 1, MPI_INT, receiver_rank, tag, MPI_COMM_WORLD);
-  MPI_Send(&num_cols, 1, MPI_INT, receiver_rank, tag, MPI_COMM_WORLD);
-    for (int i = 0; i < num_rows; ++i) {
-      send_vector(values.get_row(i), receiver_rank, tag);
-    }
-}
-
-std::shared_ptr<DM> receive_matrix(int sender_rank, int tag) {
-  MPI_Status status;
-  int num_rows;
-  int num_cols;
-  MPI_Recv(&num_rows, 1, MPI_INT, sender_rank, tag, MPI_COMM_WORLD, &status);
-  MPI_Recv(&num_cols, 1, MPI_INT, sender_rank, tag, MPI_COMM_WORLD, &status);
-
-  auto values = std::shared_ptr<DM>(new DM(num_rows, num_cols, 0.0));
-  for (int i = 0; i < num_rows; ++i) {
-    receive_vector(&(values->get_row_non_const(i)), sender_rank, tag);
-  }
-  return values;
-}
-
-void send_grid(const Grid& values, int receiver_rank, int tag) {
-  int num_rows = values.num_rows();
-  int num_cols = values.num_cols();
-  MPI_Send(&num_rows, 1, MPI_INT, receiver_rank, tag, MPI_COMM_WORLD);
-  MPI_Send(&num_cols, 1, MPI_INT, receiver_rank, tag, MPI_COMM_WORLD);
-  for (int i = 0; i < num_rows; ++i) {
-    for (int j = 0; j < num_cols; ++j) {
-      send_value(values(i, j).r_value, receiver_rank, tag);
-      send_value(values(i, j).c_value, receiver_rank, tag);
-    }
-  }
-}
-
-std::shared_ptr<Grid> receive_grid(int sender_rank, int tag) {
-  MPI_Status status;
-  int num_rows;
-  int num_cols;
-  MPI_Recv(&num_rows, 1, MPI_INT, sender_rank, tag, MPI_COMM_WORLD, &status);
-  MPI_Recv(&num_cols, 1, MPI_INT, sender_rank, tag, MPI_COMM_WORLD, &status);
-
-  auto values = std::shared_ptr<Grid>(new Grid(num_rows, num_cols));
-  double row;
-  double col;
-  for (int i = 0; i < num_rows; ++i) {
-    for (int j = 0; j < num_cols; ++j) {
-      receive_value(&row, sender_rank, tag);
-      receive_value(&col, sender_rank, tag);
-      (*values)(i, j) = { row, col };
-    }
-  }
-  return values;
-}
-
 void send_vector(const std::vector<double>& values, int receiver_rank, int tag) {
   int size = values.size();
   MPI_Send(&size, 1, MPI_INT, receiver_rank, tag, MPI_COMM_WORLD);
