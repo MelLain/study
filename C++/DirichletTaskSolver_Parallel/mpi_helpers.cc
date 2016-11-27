@@ -16,6 +16,14 @@ void receive_vector(std::vector<double>* values, int sender_rank, int tag) {
   MPI_Recv(&(*values)[0], size, MPI_DOUBLE, sender_rank, tag, MPI_COMM_WORLD, &status);
 }
 
+void send_receive_vector(const std::vector<double>& to_send, std::vector<double>* to_recv,
+                         int send_rank, int recv_rank, int send_tag, int recv_tag) {
+  MPI_Status status;
+  int size = to_send.size();
+  MPI_Sendrecv(&to_send[0], size, MPI_DOUBLE, recv_rank, send_tag,
+               &(*to_recv)[0], size, MPI_DOUBLE, send_rank, recv_tag, MPI_COMM_WORLD, &status);
+}
+
 void send_value(double value, int receiver_rank, int tag) {
   MPI_Send(&value, 1, MPI_DOUBLE, receiver_rank, tag, MPI_COMM_WORLD);
 }

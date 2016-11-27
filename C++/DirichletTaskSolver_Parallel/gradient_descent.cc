@@ -14,7 +14,6 @@ GradientDescent::GradientDescent(const GridData& grid_data, const Functions& fun
   : functions_(functions)
   , proc_bounds_(proc_bounds)
   , proc_rank_(proc_rank)
-  , first_send_(std::make_pair((proc_rank % num_row_procs) % 2 == 1, (proc_rank / num_row_procs) % 2 == 0))
   , left_right_proc_(std::make_pair(proc_bounds.is_left ? 0 : proc_rank - num_row_procs, proc_bounds.is_right ? 0 : proc_rank + num_row_procs))
   , num_points_(num_points)
 {
@@ -196,89 +195,54 @@ void GradientDescent::exchange_mirror_rows(std::shared_ptr<DM> values) {
   }
 
   // exchange rows
-  if (first_send_.first) {
-    if (!proc_bounds_.is_low) {
-      send_vector(values->get_row(values->num_rows() - 2), proc_rank_ + 1, proc_rank_);
-    }
-    if (!proc_bounds_.is_up) { 
-      send_vector(values->get_row(1), proc_rank_ - 1, proc_rank_);
-    }
- 
-    if (!proc_bounds_.is_low) {
-      receive_vector(&values->get_row_non_const(values->num_rows() - 1), proc_rank_ + 1, proc_rank_ + 1);
-    }
-    if (!proc_bounds_.is_up) {
-      receive_vector(&values->get_row_non_const(0), proc_rank_ - 1, proc_rank_ - 1);
-    }
-  } else {
-    if (!proc_bounds_.is_low) { 
-      receive_vector(&values->get_row_non_const(values->num_rows() - 1), proc_rank_ + 1, proc_rank_ + 1);
-    }
-    if (!proc_bounds_.is_up) {
-      receive_vector(&values->get_row_non_const(0), proc_rank_ - 1, proc_rank_ - 1);
-    }
+  if (!proc_bounds_.is_low) {
+    send_receive_vector(values->get_row(values->num_rows() - 2),
+                        &values->get_row_non_const(values->num_rows() - 1),
+                        proc_rank_ + 1,
+                        proc_rank_ + 1,
+                        proc_rank_,
+                        proc_rank_ + 1);
+  }
 
-    if (!proc_bounds_.is_low) {
-      send_vector(values->get_row(values->num_rows() - 2), proc_rank_ + 1, proc_rank_);
+  if (!proc_bounds_.is_up) {
+    send_receive_vector(values->get_row(1),
+                        &values->get_row_non_const(0),
+                        proc_rank_ - 1,
+                        proc_rank_ - 1,
+                        proc_rank_,
+                        proc_rank_ - 1);
+  }
+
+  // exchange cols
+  std::vector<double> data_send(values->num_rows(), 0.0);
+  std::vector<double> data_recv(values->num_rows(), 0.0);
+  if (!proc_bounds_.is_left) {
+    for (size_t i = 0; i < data_send.size(); ++i) {
+      data_send[i] = (*values)(i, 1);
     }
-    if (!proc_bounds_.is_up) {
-      send_vector(values->get_row(1), proc_rank_ - 1, proc_rank_);
+    send_receive_vector(data_send,
+                        &data_recv,
+                        left_right_proc_.first,
+                        left_right_proc_.first,
+                        proc_rank_,
+                        left_right_proc_.first);
+    for (size_t i = 0; i < data_recv.size(); ++i) {
+      (*values)(i, 0) = data_recv[i];
     }
   }
 
-  // exchange cols (maybe need to remove copy-paste)
-  std::vector<double> data(values->num_rows(), 0.0);
-  if (first_send_.second){
-    if (!proc_bounds_.is_left) {
-      for (size_t i = 0; i < data.size(); ++i) {
-        data[i] = (*values)(i, 1);
-      }
-      send_vector(data, left_right_proc_.first, proc_rank_);
+  if (!proc_bounds_.is_right) {
+    for (size_t i = 0; i < data_send.size(); ++i) {
+      data_send[i] = (*values)(i, values->num_cols() - 2);
     }
-    if (!proc_bounds_.is_right) {
-      for (size_t i = 0; i < data.size(); ++i) {
-	data[i]= (*values)(i, values->num_cols() - 2);
-      }
-      send_vector(data, left_right_proc_.second, proc_rank_);
-    }
-
-    if (!proc_bounds_.is_left) {
-      receive_vector(&data, left_right_proc_.first, left_right_proc_.first);
-      for (size_t i = 0; i < data.size(); ++i) {
-        (*values)(i, 0) = data[i];
-      }
-    }
-    if (!proc_bounds_.is_right) {
-      receive_vector(&data, left_right_proc_.second, left_right_proc_.second);
-      for (size_t i = 0; i < data.size(); ++i) {
-	(*values)(i, values->num_cols() - 1) = data[i];
-      }
-    }
-  } else {
-    if (!proc_bounds_.is_left) {
-      receive_vector(&data, left_right_proc_.first, left_right_proc_.first);
-      for (size_t i = 0; i < data.size(); ++i) {
-	(*values)(i, 0) = data[i];
-      } 
-    }
-    if (!proc_bounds_.is_right) {
-      receive_vector(&data, left_right_proc_.second, left_right_proc_.second);
-      for (size_t i = 0; i < data.size(); ++i) {
-        (*values)(i, values->num_cols() - 1) = data[i];
-      }
-    }
-
-    if (!proc_bounds_.is_left) {
-      for (size_t i = 0; i < data.size(); ++i) {
-        data[i] = (*values)(i, 1);
-      }
-      send_vector(data, left_right_proc_.first, proc_rank_);
-    }
-    if (!proc_bounds_.is_right) {
-      for (size_t i = 0; i < data.size(); ++i) {
-        data[i]= (*values)(i, values->num_cols() - 2);
-      }
-      send_vector(data, left_right_proc_.second, proc_rank_);
+    send_receive_vector(data_send,
+                        &data_recv,
+                        left_right_proc_.second,
+                        left_right_proc_.second,
+                        proc_rank_,
+                        left_right_proc_.second);
+    for (size_t i = 0; i < data_recv.size(); ++i) {
+      (*values)(i, values->num_cols() - 1) = data_recv[i];
     }
   }
 }

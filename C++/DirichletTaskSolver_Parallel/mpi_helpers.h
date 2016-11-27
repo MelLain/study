@@ -13,6 +13,8 @@ namespace DTS {
 
 void send_vector(const std::vector<double>& values, int receiver_rank, int tag);
 void receive_vector(std::vector<double>* values, int sender_rank, int tag);
+void send_receive_vector(const std::vector<double>& to_send, std::vector<double>* to_recv,
+                         int send_rank, int recv_rank, int send_tag, int recv_tag);
 
 void send_value(double value, int receiver_rank, int tag);
 void receive_value(double* value, int sender_rank, int tag);

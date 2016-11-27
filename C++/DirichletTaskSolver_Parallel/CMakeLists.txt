@@ -14,7 +14,7 @@ include_directories(${MPI_INCLUDE_PATH})
 
 set(SOURCE_LIB grid.cc gradient_descent.cc mpi_helpers.cc matrix_operations.cc)
 
-set(CXX_COVERAGE_COMPILE_FLAGS "-fopenmp -m64")
+set(CXX_COVERAGE_COMPILE_FLAGS " -m64")
 
 if(MPI_COMPILE_FLAGS)
   set_target_properties(srcmain PROPERTIES

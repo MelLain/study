@@ -57,7 +57,6 @@ class GradientDescent {
   size_t proc_rank_;
   size_t num_points_;
 
-  std::pair<bool, bool> first_send_;
   std::pair<size_t, size_t> left_right_proc_;
 
   std::shared_ptr<Grid> grid_;
