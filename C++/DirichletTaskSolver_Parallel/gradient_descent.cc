@@ -9,13 +9,16 @@
 namespace DTS {
 
 GradientDescent::GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
-                                 size_t proc_rank, size_t num_row_procs, size_t num_points,
+                                 size_t num_procs, size_t proc_rank, size_t num_row_procs, size_t num_points,
                                  size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx)
   : functions_(functions)
   , proc_bounds_(proc_bounds)
+  , num_procs_(num_procs)
   , proc_rank_(proc_rank)
   , left_right_proc_(std::make_pair(proc_bounds.is_left ? 0 : proc_rank - num_row_procs, proc_bounds.is_right ? 0 : proc_rank + num_row_procs))
   , num_points_(num_points)
+  , error_(1e+10)
+  , num_processed_iter_(0)
 {
   clear();
   init_grid(grid_data, start_row_idx, end_row_idx, start_col_idx, end_col_idx);
@@ -30,15 +33,20 @@ GradientDescent::GradientDescent(const GridData& grid_data, const Functions& fun
 }
 
 void GradientDescent::FitModel() {
-  bool first_iter = true;
   while (true) {
-    FlagType flag;
-    receive_flag(&flag, 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      send_flag_to_all(num_procs_, START_ITER);
+    }
 
-    if (flag == TERMINATE) {
-      send_value(count_pre_error(), 0, proc_rank_);
-      save_results_file();
-      break;
+    FlagType flag;
+    if (proc_rank_ > 0) {    
+      receive_flag(&flag, 0, proc_rank_);
+
+      if (flag == TERMINATE) {
+        send_value(count_pre_error(), 0, proc_rank_);
+        save_results_file();
+        break;
+      }
     }
 
     exchange_mirror_rows(values_);
@@ -49,23 +57,30 @@ void GradientDescent::FitModel() {
     exchange_mirror_rows(residuals_lap);
 
     // step 2: count alpha
-    double alpha_den_part = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
-    double alpha_nom_part =  ProductByPointAndSum(*residuals_lap, *gradients_, *grid_);
+    double alpha_den = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
+    double alpha_nom =  ProductByPointAndSum(*residuals_lap, *gradients_, *grid_);
 
-    send_value(alpha_den_part, 0, proc_rank_);
-    double alpha_den;
-    receive_value(&alpha_den, 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      alpha_den += collect_value_from_all(num_procs_);
+      send_value_to_all(num_procs_, alpha_den);
+    } else {
+      send_value(alpha_den, 0, proc_rank_);
+      receive_value(&alpha_den, 0, proc_rank_);
+    }
 
-    send_value(alpha_nom_part, 0, proc_rank_);
-    double alpha_nom;
-    receive_value(&alpha_nom, 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      alpha_nom += collect_value_from_all(num_procs_);
+      send_value_to_all(num_procs_, alpha_nom);
+    } else {
+      send_value(alpha_nom, 0, proc_rank_);
+      receive_value(&alpha_nom, 0, proc_rank_);
+    }
 
     double alpha = alpha_den > 0.0 ? alpha_nom / alpha_den : 0.0;
 
     // step 3: count new gradients
-    if (first_iter) {
+    if (num_processed_iter_ == 0) {
       *gradients_ = *residuals;
-      first_iter = false;
     } else {
       gradients_ = *residuals - *gradients_ * alpha;
     }
@@ -75,16 +90,24 @@ void GradientDescent::FitModel() {
     exchange_mirror_rows(gradients_laplass_);
 
     // step 5: count tau
-    double tau_den_part = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
-    double tau_nom_part = ProductByPointAndSum(*residuals, *gradients_, *grid_);
+    double tau_den = ProductByPointAndSum(*gradients_laplass_, *gradients_, *grid_);
+    double tau_nom = ProductByPointAndSum(*residuals, *gradients_, *grid_);
 
-    send_value(tau_den_part, 0, proc_rank_);
-    double tau_den;
-    receive_value(&tau_den, 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      tau_den += collect_value_from_all(num_procs_);
+      send_value_to_all(num_procs_, tau_den);
+    } else {
+      send_value(tau_den, 0, proc_rank_);
+      receive_value(&tau_den, 0, proc_rank_);
+    }
 
-    send_value(tau_nom_part, 0, proc_rank_);
-    double tau_nom;
-    receive_value(&tau_nom, 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      tau_nom += collect_value_from_all(num_procs_);
+      send_value_to_all(num_procs_, tau_nom);
+    } else {
+      send_value(tau_nom, 0, proc_rank_);
+      receive_value(&tau_nom, 0, proc_rank_);
+    }
 
     double tau = tau_den > 0.0 ? tau_nom / tau_den : 0.0;
 
@@ -95,7 +118,19 @@ void GradientDescent::FitModel() {
     count_new_values(tau);
 
     // step 7: send difference to master and finish iter 
-    send_value(values_difference(), 0, proc_rank_);
+    if (proc_rank_ == 0) {
+      double difference = sqrt(collect_value_from_all(num_procs_) + values_difference());
+      if (difference < EPS) {     
+        send_flag_to_all(num_procs_, TERMINATE);
+        error_ = sqrt(collect_value_from_all(num_procs_) + count_pre_error());
+        save_results_file();
+        break;
+      }
+    } else {
+      send_value(values_difference(), 0, proc_rank_);
+    }
+
+    ++num_processed_iter_;
   }
 }
 
@@ -256,8 +291,10 @@ void GradientDescent::save_results_file() {
   size_t start_col_shift = proc_bounds_.is_left ? 0 : 1;
   size_t end_col_shift = proc_bounds_.is_right ? 0 : 1;
 
-  out_value_file.open("VALUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" + std::to_string(proc_rank_));
-  out_true_file.open("TRUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" + std::to_string(proc_rank_));
+  out_value_file.open("VALUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" +
+                      std::to_string(num_procs_)  + "_" + std::to_string(proc_rank_));
+  out_true_file.open("TRUE_PART_POINTS_" + std::to_string(num_points_) + "_PROC_" +
+                     std::to_string(num_procs_) + "_" + std::to_string(proc_rank_));
 
   for (size_t i = start_row_shift; i < values_->num_rows() - end_row_shift; ++i) {
     for (size_t j = start_col_shift; j < values_->num_cols() - end_col_shift; ++j) {

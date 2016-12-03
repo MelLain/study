@@ -79,25 +79,25 @@ int main(int argc, char* argv[]) {
   MPI_Comm_size(MPI_COMM_WORLD, &num_processors);
 
   try {
-    int power_of_two = is_power_of_two(num_processors - 1);
+    int power_of_two = is_power_of_two(num_processors);
 
-    if (num_processors < 2 || power_of_two == -1) {
-      throw std::runtime_error("Invalid number of procs (< 2 or not 2^q + 1)");
+    if (num_processors < 1 || power_of_two == -1) {
+      throw std::runtime_error("Invalid number of procs (not 2^q, q >= 0)");
     }
 
     size_t grid_size = 0;
     if (argc != 2) {
-      throw std::runtime_error("Incorrect usage! Use ./srcmain <grid_size>");
+      throw std::runtime_error("Incorrect usage! Use <run_command> srcmain <grid_size>");
     } else {
       grid_size = std::stoi(argv[1]);
     }
 
-    if (num_processors - 1 > static_cast<int>(grid_size * 0.5)) {
+    if (num_processors > static_cast<int>(grid_size * 0.5)) {
       throw std::runtime_error("Invalid number of procs (too many)");
     }
 
     size_t num_row_procs = num_row_processors(grid_size, grid_size,
-      static_cast<int>((num_processors - 1) * ((power_of_two % 2 == 0) ? 1 : 0.5)));
+      static_cast<int>((num_processors) * ((power_of_two % 2 == 0) ? 1 : 0.5)));
     num_row_procs *= power_of_two % 2 == 0 ? 1 : 2;
 
     size_t r_grid_size = grid_size;
@@ -109,99 +109,68 @@ int main(int argc, char* argv[]) {
                             [](const Point& p) { return pow((1 - pow(p.r_value, 2)), 2) + pow((1 - pow(p.c_value, 2)), 2); },
                             [](double value, double q) { return (pow(1 + value, q) - 1) / (pow(2.0, q) - 1); } };
 
-    if (rank == 0) {
-      size_t num_processed_iter = 0;
-      double error = 1;
-      while (true) {
-        ++num_processed_iter;
-        // start new iter
-        send_flag_to_all(num_processors, START_ITER);
+    size_t sub_rank = (rank % num_row_procs) + 1;
+    size_t int_num_rows = r_grid_size / num_row_procs;
+    size_t mod_num_rows = r_grid_size % num_row_procs;
+    size_t num_rows_to_process = int_num_rows + (sub_rank <= mod_num_rows ? 1 : 0);
 
-        // wait for parts of alpha, sum them and send back
-        double alpha_den = collect_value_from_all(num_processors);
-        send_value_to_all(num_processors, alpha_den);
-
-        double alpha_nom = collect_value_from_all(num_processors);
-        send_value_to_all(num_processors, alpha_nom);
-
-	// wait for parts of tau, sum them and send back
-        double tau_den = collect_value_from_all(num_processors);
-        send_value_to_all(num_processors, tau_den);
-
-        double tau_nom = collect_value_from_all(num_processors);
-        send_value_to_all(num_processors, tau_nom);
-
-        // wait for the end of the iteration and collect errors
-        double difference = sqrt(collect_value_from_all(num_processors));
-
-        if (difference < EPS) {
-	  send_flag_to_all(num_processors, TERMINATE);
-
-          // receive errors and save info about parts of result
-          error = sqrt(collect_value_from_all(num_processors));
-          save_info_file(num_processors - 1, error, num_processed_iter, num_row_procs, grid_size, MPI_Wtime() - begin_time);
-	  break;
-        }
-      }
-
-      std::cout << rank  << ": Finished! Elapsed time: " << MPI_Wtime() - begin_time << " sec." << std::endl
-                << "Final error: " << error << std::endl << "Num iters processed: " << num_processed_iter << std::endl;
+    size_t r_start_idx = 0;
+    if (sub_rank <= mod_num_rows) {
+      r_start_idx = (sub_rank - 1) * (int_num_rows + 1);
     } else {
-      size_t sub_rank = (rank - 1) % num_row_procs + 1;
-      size_t int_num_rows = r_grid_size / num_row_procs;
-      size_t mod_num_rows = r_grid_size % num_row_procs;
-      size_t num_rows_to_process = int_num_rows + (sub_rank <= mod_num_rows ? 1 : 0);
+      r_start_idx = (int_num_rows + 1) * mod_num_rows + (int_num_rows * (sub_rank - mod_num_rows - 1));
+    }
 
-      size_t r_start_idx = 0;
-      if (sub_rank <= mod_num_rows) {
-        r_start_idx = (sub_rank - 1) * (int_num_rows + 1);
-      } else {
-        r_start_idx = (int_num_rows + 1) * mod_num_rows + (int_num_rows * (sub_rank - mod_num_rows - 1));
+    size_t num_col_procs = num_processors / num_row_procs;
+    sub_rank = rank / num_row_procs + 1;
+    size_t int_num_cols = c_grid_size / num_col_procs;
+    size_t mod_num_cols = c_grid_size % num_col_procs;
+    size_t num_cols_to_process = int_num_cols + (sub_rank <= mod_num_cols ? 1 : 0);
+
+    size_t c_start_idx = 0;
+    if (sub_rank <= mod_num_cols) {
+      c_start_idx = (sub_rank - 1) * (int_num_cols + 1);
+    } else {
+      c_start_idx = (int_num_cols + 1) * mod_num_cols + (int_num_cols * (sub_rank - mod_num_cols - 1));
+    }
+
+    ProcBounds proc_bounds = { false, false, false, false };
+    if (num_processors > 2) {
+      if (rank % num_row_procs == 0) {
+        proc_bounds.is_up = true;
       }
-
-      size_t num_col_procs = (num_processors - 1) / num_row_procs;
-      sub_rank = (rank - 1) / num_row_procs + 1;
-      size_t int_num_cols = c_grid_size / num_col_procs;
-      size_t mod_num_cols = c_grid_size % num_col_procs;
-      size_t num_cols_to_process = int_num_cols + (sub_rank <= mod_num_cols ? 1 : 0);
-
-      size_t c_start_idx = 0;
-      if (sub_rank <= mod_num_cols) {
-        c_start_idx = (sub_rank - 1) * (int_num_cols + 1);
-      } else {
-        c_start_idx = (int_num_cols + 1) * mod_num_cols + (int_num_cols * (sub_rank - mod_num_cols - 1));
+      if ((rank + 1) % num_row_procs == 0) {
+        proc_bounds.is_low = true;
       }
-
-      ProcBounds proc_bounds = { false, false, false, false };
-      if (num_processors > 2) {
-        if (rank % num_row_procs == 1) {
-          proc_bounds.is_up = true;
-        }
-        if (rank % num_row_procs == 0) {
-          proc_bounds.is_low = true;
-        }
-        if (rank <= num_row_procs) {
-          proc_bounds.is_left = true;
-        }
-        if (rank > num_row_procs * (num_col_procs - 1)) {
-	  proc_bounds.is_right = true;
-        }
-      } else {
-        proc_bounds = { true, true, true, true };
+      if (rank < num_row_procs) {
+        proc_bounds.is_left = true;
       }
+      if (rank >= num_row_procs * (num_col_procs - 1)) {
+        proc_bounds.is_right = true;
+      }
+    } else {
+      proc_bounds = { true, true, true, true };
+    }
 
-      // each submatrix has both sides rows and cols mirroring
-      auto model = GradientDescent(grid_data,
-                                   functions,
-                                   proc_bounds,
-                                   rank,
-                                   num_row_procs,
-                                   grid_size,
-                                   r_start_idx,
-                                   r_start_idx + num_rows_to_process,
-                                   c_start_idx,
-                                   c_start_idx + num_cols_to_process);
-      model.FitModel();
+    // each submatrix has both sides rows and cols mirroring
+    auto model = GradientDescent(grid_data,
+                                 functions,
+                                 proc_bounds,
+                                 num_processors,
+                                 rank,
+                                 num_row_procs,
+                                 grid_size,
+                                 r_start_idx,
+                                 r_start_idx + num_rows_to_process,
+                                 c_start_idx,
+                                 c_start_idx + num_cols_to_process);
+    model.FitModel();
+
+    if (rank == 0) {
+      std::cout << rank  << ": Finished! Elapsed time: " << MPI_Wtime() - begin_time << " sec." << std::endl
+                << "Final error: " << model.Error() << std::endl << "Num iters processed: " << model.NumProcessedIter() << std::endl;
+
+      save_info_file(num_processors, model.Error(), model.NumProcessedIter(), num_row_procs, grid_size, MPI_Wtime() - begin_time);
     }
   } catch (const std::exception& e) {
     std::cout << rank << " : " << e.what() << std::endl;

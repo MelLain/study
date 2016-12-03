@@ -8,6 +8,11 @@
 #include <iomanip>
 #include <string>
 
+/*
+Uncomment and set num threads to use OpenMP
+#include "omp.h"
+*/
+
 namespace DTS {
 
 struct ProcBounds {

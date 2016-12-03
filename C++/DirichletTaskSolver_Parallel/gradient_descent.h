@@ -23,12 +23,14 @@ struct Functions {
 class GradientDescent {
  public:
   GradientDescent(const GridData& grid_data, const Functions& functions, const ProcBounds& proc_bounds,
-                  size_t proc_rank, size_t num_row_procs, size_t num_points,
+                  size_t num_procs, size_t proc_rank, size_t num_row_procs, size_t num_points,
                   size_t start_row_idx, size_t end_row_idx, size_t start_col_idx, size_t end_col_idx);
   ~GradientDescent() { clear(); }
 
   void FitModel();
   const DM& GetCurrentMatrix() const { return *values_; }
+  double Error() { return error_; }
+  size_t NumProcessedIter() { return num_processed_iter_; }
 
   void clear() {
     grid_.reset();
@@ -54,8 +56,12 @@ class GradientDescent {
 
   Functions functions_;
   ProcBounds proc_bounds_;
+  size_t num_procs_;
   size_t proc_rank_;
   size_t num_points_;
+
+  double error_;
+  size_t num_processed_iter_;
 
   std::pair<size_t, size_t> left_right_proc_;
 

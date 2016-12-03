@@ -5,6 +5,7 @@ namespace DTS {
 std::shared_ptr<DM> FivePointsLaplass(const DM& src, const Grid& grid) {
   auto retval = std::shared_ptr<DM>(new DM(src.num_rows(), src.num_cols(), 0.0));
 
+  #pragma omp parallel for
   for (size_t i = 1; i < retval->num_rows() - 1; ++i) {
     for (size_t j = 1; j < retval->num_cols() - 1; ++j) {
       double part_1 = (src(i, j) - src(i - 1, j)) / grid.r_step(i) - (src(i + 1, j) - src(i, j)) / grid.r_step(i + 1);
@@ -24,6 +25,7 @@ double ProductByPointAndSum(const DM& src_1, const DM& src_2, const Grid& grid) 
     throw std::runtime_error("ProductByPointAndSum: inconsistent sizes of matrices");
   }
 
+  #pragma omp parallel for reduction(+:retval)
   for (size_t i = 1; i < src_1.num_rows() - 1; ++i) {
     for (size_t j = 1; j < src_1.num_cols() - 1; ++j) {
       retval += 0.25 * (grid.r_step(i) + grid.r_step(i + 1)) * (grid.c_step(j) + grid.c_step(j + 1)) * src_1(i, j) * src_2(i, j);
