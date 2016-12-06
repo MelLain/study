@@ -92,10 +92,6 @@ int main(int argc, char* argv[]) {
       grid_size = std::stoi(argv[1]);
     }
 
-    if (num_processors > static_cast<int>(grid_size * 0.5)) {
-      throw std::runtime_error("Invalid number of procs (too many)");
-    }
-
     size_t num_row_procs = num_row_processors(grid_size, grid_size,
       static_cast<int>((num_processors) * ((power_of_two % 2 == 0) ? 1 : 0.5)));
     num_row_procs *= power_of_two % 2 == 0 ? 1 : 2;
