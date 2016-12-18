@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     }
 
     ProcBounds proc_bounds = { false, false, false, false };
-    if (num_processors > 2) {
+    if (num_processors > 1) {
       if (rank % num_row_procs == 0) {
         proc_bounds.is_up = true;
       }
